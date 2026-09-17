@@ -1,5 +1,5 @@
-#ifndef DYNAMIC_LIBRARY_H
-#define DYNAMIC_LIBRARY_H
+#ifndef BASE_LIBRARY_H
+#define BASE_LIBRARY_H
 
 typedef struct Library Library;
 struct Library {
@@ -13,4 +13,4 @@ internal Library    library_open(String8 path);
 internal void       library_close(Library lib);
 internal void_proc *library_load_proc(Library lib, String8 name);
 
-#endif // DYNAMIC_LIBRARY_H
+#endif // BASE_LIBRARY_H

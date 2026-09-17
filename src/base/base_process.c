@@ -29,6 +29,7 @@ internal Process
 launch_cmd_line(String8 string) {
   Process result = {0};
   Temp scratch = scratch_begin(0, 0);
+
   u8 split_chars[] = {' '};
   String8_List parts = str8_split(scratch.arena, string, split_chars, array_count(split_chars), 0);
   if (parts.count != 0) {

@@ -1,5 +1,5 @@
-#ifndef WIN32_WINDOW_MANAGER_H
-#define WIN32_WINDOW_MANAGER_H
+#ifndef W32_WM_H
+#define W32_WM_H
 
 ////////////////////////////////
 // NOTE: Includes/Libraries
@@ -83,4 +83,4 @@ internal void           w32_wm_window_release(W32_WM_Window *window);
 internal WM_Event      *w32_wm_push_event(WM_Event_Type type, W32_WM_Window *window);
 internal LRESULT        w32_wm_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-#endif // WIN32_WINDOW_MANAGER_H
+#endif // W32_WM_H

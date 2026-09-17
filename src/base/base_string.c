@@ -119,8 +119,8 @@ str8_range(u8 *first, u8 *opl) {
 }
 
 internal String8
-str8_cstr(u8 *cstr) {
-  String8 result = str8_make(cstr, cstr8_len(cstr));
+str8_cstr(char *cstr) {
+  String8 result = str8_make((u8 *)cstr, cstr8_len((u8 *)cstr));
   return(result);
 }
 
@@ -877,15 +877,15 @@ string_from_operating_system(Operating_System os) {
 }
 
 internal String8
-string_from_architecture(Architecture arch) {
+string_from_arch(Arch arch) {
   String8 result = {0};
   switch (arch) {
-    case Architecture_NULL:  {result = str8_lit("Null");} break;
-    case Architecture_X64:   {result = str8_lit("x64");} break;
-    case Architecture_X86:   {result = str8_lit("x86");} break;
-    case Architecture_ARM64: {result = str8_lit("arm64");} break;
-    case Architecture_ARM32: {result = str8_lit("arm32");} break;
-    case Architecture_COUNT: {result = str8_lit("Invalid");} break;
+    case Arch_NULL:  {result = str8_lit("Null");} break;
+    case Arch_X64:   {result = str8_lit("x64");} break;
+    case Arch_X86:   {result = str8_lit("x86");} break;
+    case Arch_ARM64: {result = str8_lit("arm64");} break;
+    case Arch_ARM32: {result = str8_lit("arm32");} break;
+    case Arch_COUNT: {result = str8_lit("Invalid");} break;
   }
   return result;
 }

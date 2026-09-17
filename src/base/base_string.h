@@ -123,7 +123,7 @@ internal u64 cstr32_len(u32 *cstr);
 internal String8 str8_zero(void);
 internal String8 str8_make(u8 *str, u64 size);
 internal String8 str8_range(u8 *first, u8 *opl);
-internal String8 str8_cstr(u8 *cstr);
+internal String8 str8_cstr(char *cstr);
 
 internal String16 str16_zero(void);
 internal String16 str16_make(u16 *data, u64 size);
@@ -243,7 +243,7 @@ internal String32 str32_from_8(Arena *arena, String8 in);
 // NOTE: Space Enum <-> String Conversions
 
 internal String8 string_from_operating_system(Operating_System os);
-internal String8 string_from_architecture(Architecture arch);
+internal String8 string_from_arch(Arch arch);
 internal String8 string_from_compiler(Compiler compiler);
 
 #endif // BASE_STRING_H

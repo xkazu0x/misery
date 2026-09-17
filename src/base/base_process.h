@@ -69,7 +69,7 @@ internal b32           set_current_path(String8 path);
 // NOTE: @per_os_impl Child Processes
 
 internal Process process_launch(Process_Launch_Params *params);
-internal u64     pid_from_process(Process process);
+internal u64     process_pid(Process process);
 internal b32     process_join(Process process, u64 endt_us, u64 *out_exit_code);
 internal void    process_detach(Process process);
 internal b32     process_kill(Process process);

@@ -11,7 +11,7 @@
 #include <math.h>
 #include <string.h>
 
-#if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
+#if CC_MSVC || (CC_CLANG && OS_WINDOWS)
 #include <intrin.h>
 #endif
 
@@ -27,25 +27,25 @@
 #define global   static
 #define local    static
 
-#if COMPILER_MSVC
+#if CC_MSVC
 # define thread_static __declspec(thread)
-#elif COMPILER_CLANG || COMPILER_GCC
+#elif CC_CLANG || CC_GCC
 # define thread_static __thread
 #else
 # error thread_static not defined for this compiler.
 #endif
 
-#if COMPILER_MSVC
+#if CC_MSVC
 # define force_inline __forceinline
-#elif COMPILER_CLANG || COMPILER_GCC
+#elif CC_CLANG || CC_GCC
 # define force_inline __attribute__((always_inline))
 #else
 # error force_inline not defined for this compiler.
 #endif
 
-#if COMPILER_MSVC
+#if CC_MSVC
 # define no_inline __declspec(noinline)
-#elif COMPILER_CLANG || COMPILER_GCC
+#elif CC_CLANG || CC_GCC
 # define no_inline __attribute__((noinline))
 #else
 # error no_inline not defined for this compiler.
@@ -83,19 +83,19 @@
 ////////////////////////////////
 // NOTE: Type -> Alignment
 
-#if COMPILER_MSVC
+#if CC_MSVC
 # define align_of(T) __alignof(T)
-#elif COMPILER_CLANG
+#elif CC_CLANG
 # define align_of(T) __alignof(T)
-#elif COMPILER_GCC
+#elif CC_GCC
 # define align_of(T) __alignof__(T)
 #else
 # error aling_of not defined for this compiler.
 #endif
 
-#if COMPILER_MSVC
+#if CC_MSVC
 # define align_type(x) __declspec(align(x))
-#elif COMPILER_CLANG || COMPILER_GCC
+#elif CC_CLANG || CC_GCC
 # define align_type(x) __attribute__((aligned(x)))
 #else
 # error align_type not defined for this compiler.
@@ -143,9 +143,9 @@
 ////////////////////////////////
 // NOTE: Asserts
 
-#if COMPILER_MSVC
+#if CC_MSVC
 # define trap() __debugbreak()
-#elif COMPILER_CLANG || COMPILER_GCC
+#elif CC_CLANG || CC_GCC
 # define trap() __builtin_trap()
 #else
 # error Unknown trap intrinsic for this compiler.
@@ -230,12 +230,12 @@
 ////////////////////////////////
 // NOTE: Address Sanitizer Markup
 
-#if COMPILER_MSVC
+#if CC_MSVC
 # if defined(__SANITIZE_ADDRESS__)
 #  define ASAN_ENABLED 1
 #  define ASAN_NO_ADDR __declspec(no_sanitize_address)
 # endif
-#elif COMPILER_CLANG
+#elif CC_CLANG
 # if defined(__has_feature)
 #  if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
 #   define ASAN_ENABLED 1
@@ -298,20 +298,20 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 ////////////////////////////////
 // NOTE: Base Types
 
-typedef uint8_t   u8;
-typedef uint16_t  u16;
-typedef uint32_t  u32;
-typedef uint64_t  u64;
-typedef int8_t    s8;
-typedef int16_t   s16;
-typedef int32_t   s32;
-typedef int64_t   s64;
-typedef s8        b8;
-typedef s16       b16;
-typedef s32       b32;
-typedef s64       b64;
-typedef float     f32;
-typedef double    f64;
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef int8_t   s8;
+typedef int16_t  s16;
+typedef int32_t  s32;
+typedef int64_t  s64;
+typedef s8       b8;
+typedef s16      b16;
+typedef s32      b32;
+typedef s64      b64;
+typedef double   f64;
+typedef float    f32;
 typedef void void_proc(void);
 
 ////////////////////////////////
@@ -334,24 +334,24 @@ typedef enum Operating_System {
 # define Operating_System_CURRENT Operating_System_NULL
 #endif
 
-typedef enum Architecture {
-  Architecture_NULL,
-  Architecture_X64,
-  Architecture_X86,
-  Architecture_ARM64,
-  Architecture_ARM32,
-  Architecture_COUNT,
-} Architecture;
+typedef enum Arch {
+  Arch_NULL,
+  Arch_X64,
+  Arch_X86,
+  Arch_ARM64,
+  Arch_ARM32,
+  Arch_COUNT,
+} Arch;
 #if ARCH_X64
-# define Arch_CURRENT Architecture_X64
+# define Arch_CURRENT Arch_X64
 #elif ARCH_X86
-# define Arch_CURRENT Architecture_X86
+# define Arch_CURRENT Arch_X86
 #elif ARCH_ARM64
-# define Arch_CURRENT Architecture_ARM64
+# define Arch_CURRENT Arch_ARM64
 #elif ARCH_ARM32
-# define Arch_CURRENT Architecture_ARM32
+# define Arch_CURRENT Arch_ARM32
 #else
-# define Arch_CURRENT Architecture_NULL
+# define Arch_CURRENT Arch_NULL
 #endif
 
 typedef enum Compiler {
@@ -361,11 +361,11 @@ typedef enum Compiler {
   Compiler_CLANG,
   Compiler_COUNT,
 } Compiler;
-#if COMPILER_MSVC
+#if CC_MSVC
 # define Compiler_CURRENT Compiler_MSVC
-#elif COMPILER_GCC
+#elif CC_GCC
 # define Compiler_CURRENT Compiler_GCC
-#elif COMPILER_CLANG
+#elif CC_CLANG
 # define Compiler_CURRENT Compiler_CLANG
 #else
 # define Compiler_CURRENT Compiler_NULL
@@ -567,8 +567,8 @@ internal u64 clz64(u64 mask);
 ////////////////////////////////
 // NOTE: Toolchain/Environment Enum Functions
 
-internal u64 bit_size_from_arch(Architecture arch);
-internal u64 byte_size_from_arch(Architecture arch);
+internal u64 bit_size_from_arch(Arch arch);
+internal u64 byte_size_from_arch(Arch arch);
 
 ////////////////////////////////
 // NOTE: Time Functions

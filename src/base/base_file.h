@@ -21,16 +21,16 @@ enum {
 typedef u32 File_Iter_Flags;
 enum {
   File_Iter_Flag_SKIP_DIRECTORY = (1<<0),
-  File_Iter_Flag_SKIP_FILE   = (1<<1),
-  File_Iter_Flag_SKIP_HIDDEN  = (1<<2),
-  File_Iter_Flag_DONE         = (1<<3),
+  File_Iter_Flag_SKIP_FILE      = (1<<1),
+  File_Iter_Flag_SKIP_HIDDEN    = (1<<2),
+  File_Iter_Flag_DONE           = (1<<3),
 };
 
 typedef struct File_Properties File_Properties;
 struct File_Properties {
   u64 size;
-  Dense_Time modified;
   Dense_Time created;
+  Dense_Time modified;
   File_Property_Flags flags;
 };
 
@@ -59,8 +59,11 @@ internal b32  file_match(File a, File b);
 ////////////////////////////////
 // NOTE: File System Helpers
 
-internal String8 data_from_file_path(Arena *arena, String8 path);
 internal String8 string_from_file_min_max(Arena *arena, File file, u64 min, u64 max);
+internal String8 data_from_file_path(Arena *arena, String8 path);
+// TODO: write_data_to_file_path
+// TODO: write_data_list_to_file_path
+// TODO: append_data_to_file_path
 
 ////////////////////////////////
 // NOTE: @per_os_impl File System
@@ -70,11 +73,16 @@ internal File            file_open(String8 path, File_Access_Flags flags);
 internal void            file_close(File file);
 internal u64             file_read(File file, u64 min, u64 max, void *out_data);
 internal u64             file_write(File file, u64 min, u64 max, void *data);
-internal File_Properties properties_from_file(File file);
-internal b32             delete_file_path(String8 path);
-internal b32             copy_file_path(String8 dst, String8 src);
-internal b32             move_file_path(String8 dst, String8 src);
+internal File_Properties file_properties(File file);
+internal b32             file_path_remove(String8 path);
+internal b32             file_path_move(String8 dst, String8 src);
+internal b32             file_path_copy(String8 dst, String8 src);
 internal String8         full_path_from_path(Arena *arena, String8 path);
+internal b32             file_path_exists(String8 path);
+
+// NOTE: directories
+internal b32 directory_make(String8 path);
+internal b32 directory_path_exists(String8 path);
 
 // NOTE: directory iteration
 internal File_Iter file_iter_begin(Arena *arena, String8 path, File_Iter_Flags flags);

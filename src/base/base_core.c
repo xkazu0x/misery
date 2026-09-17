@@ -25,7 +25,7 @@ safe_cast_s32(s64 x) {
 ////////////////////////////////
 // NOTE: Bit Patterns
 
-#if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
+#if CC_MSVC || (CC_CLANG && OS_WINDOWS)
 
 internal u64
 ctz32(u32 mask) {
@@ -55,7 +55,7 @@ clz64(u64 mask) {
   return(63 - idx);
 }
 
-#elif COMPILER_CLANG || COMPILER_GCC
+#elif CC_CLANG || CC_GCC
 
 internal u64
 ctz32(u32 mask) {
@@ -85,21 +85,21 @@ clz64(u64 mask) {
 // NOTE: Toolchain/Environment Enum Functions
 
 internal u64
-bit_size_from_architecture(Architecture arch) {
+bit_size_from_arch(Arch arch) {
   u64 arch_bitsize = 0;
   switch (arch) {
-    case Architecture_X64:   arch_bitsize = 64; break;
-    case Architecture_X86:   arch_bitsize = 32; break;
-    case Architecture_ARM64: arch_bitsize = 64; break;
-    case Architecture_ARM32: arch_bitsize = 32; break;
+    case Arch_X64:   arch_bitsize = 64; break;
+    case Arch_X86:   arch_bitsize = 32; break;
+    case Arch_ARM64: arch_bitsize = 64; break;
+    case Arch_ARM32: arch_bitsize = 32; break;
     default: break;
   }
   return(arch_bitsize);
 }
 
 internal u64
-byte_size_from_arch(Architecture arch) {
-  return(bit_size_from_architecture(arch)/8);
+byte_size_from_arch(Arch arch) {
+  return(bit_size_from_arch(arch)/8);
 }
 
 ////////////////////////////////

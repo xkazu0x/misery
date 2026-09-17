@@ -1,5 +1,5 @@
-#ifndef WIN32_BASE_H
-#define WIN32_BASE_H
+#ifndef W32_BASE_H
+#define W32_BASE_H
 
 ////////////////////////////////
 // NOTE: Includes/Libraries
@@ -52,4 +52,4 @@ internal void w32_system_time_from_date_time(SYSTEMTIME *out, Date_Time *in);
 internal void w32_dense_time_from_file_time(Dense_Time *out, FILETIME *in);
 internal u32 w32_sleep_ms_from_endt_us(u64 endt_us);
 
-#endif // WIN32_BASE_H
+#endif // W32_BASE_H

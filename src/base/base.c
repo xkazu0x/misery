@@ -4,14 +4,16 @@
 #include "base_arena.c"
 #include "base_string.c"
 #include "base_system.c"
-#include "base_thread_context.c"
-#include "base_process.c"
+#include "base_tctx.c"
 #include "base_file.c"
-#include "base_dynamic_library.c"
+#include "base_process.c"
+#include "base_library.c"
 #include "base_entry_point.c"
 
 #if OS_WINDOWS
-# include "win32/base/win32_base.c"
+# include "w32/base/w32_base.c"
+#elif OS_LINUX
+# include "lnx/base/lnx_base.c"
 #else
-# error Operating System backend not found for base layer.
+# error Base layer not implemented for this operating system.
 #endif

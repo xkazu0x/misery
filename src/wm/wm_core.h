@@ -1,5 +1,5 @@
-#ifndef WINDOW_MANAGER_CORE_H
-#define WINDOW_MANAGER_CORE_H
+#ifndef WM_CORE_H
+#define WM_CORE_H
 
 ////////////////////////////////
 // NOTE: Graphics System Info
@@ -253,8 +253,8 @@ internal b32 frame(void);
 ////////////////////////////////
 // NOTE: Handle Type Helpers
 
-internal WM_Window   wm_window_zero(void);
-internal b32         wm_window_match(WM_Window a, WM_Window b);
+internal WM_Window wm_window_zero(void);
+internal b32       wm_window_match(WM_Window a, WM_Window b);
 
 ////////////////////////////////
 // NOTE: Event Helpers
@@ -312,4 +312,4 @@ internal void wm_set_cursor(WM_Cursor cursor);
 
 internal void wm_graphical_message(b32 error, String8 title, String8 message);
 
-#endif // WINDOW_MANAGER_CORE_H
+#endif // WM_CORE_H

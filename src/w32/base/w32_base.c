@@ -208,7 +208,7 @@ file_write(File file, u64 min, u64 max, void *data) {
 }
 
 internal File_Properties
-properties_from_file(File file) {
+file_properties(File file) {
   File_Properties result = {0};
   if (!file_match(file, file_zero())) {
     HANDLE handle = (HANDLE)file.v[0];
@@ -224,7 +224,7 @@ properties_from_file(File file) {
 }
 
 internal b32
-delete_file_path(String8 path) {
+file_path_remove(String8 path) {
   Temp scratch = scratch_begin(0, 0);
   String16 path16 = str16_from_8(scratch.arena, path);
   b32 result = DeleteFileW((WCHAR *)path16.str);
@@ -233,21 +233,21 @@ delete_file_path(String8 path) {
 }
 
 internal b32
-copy_file_path(String8 dst, String8 src) {
+file_path_move(String8 dst, String8 src) {
   Temp scratch = scratch_begin(0, 0);
   String16 dst16 = str16_from_8(scratch.arena, dst);
   String16 src16 = str16_from_8(scratch.arena, src);
-  b32 result = CopyFileW((WCHAR *)src16.str, (WCHAR *)dst16.str, 0);
+  b32 result = MoveFileW((WCHAR *)src16.str, (WCHAR *)dst16.str);
   scratch_end(scratch);
   return(result);
 }
 
 internal b32
-move_file_path(String8 dst, String8 src) {
+file_path_copy(String8 dst, String8 src) {
   Temp scratch = scratch_begin(0, 0);
   String16 dst16 = str16_from_8(scratch.arena, dst);
   String16 src16 = str16_from_8(scratch.arena, src);
-  b32 result = MoveFileW((WCHAR *)src16.str, (WCHAR *)dst16.str);
+  b32 result = CopyFileW((WCHAR *)src16.str, (WCHAR *)dst16.str, 0);
   scratch_end(scratch);
   return(result);
 }
@@ -267,6 +267,29 @@ full_path_from_path(Arena *arena, String8 path) {
   }
   String8 result = str8_from_16(arena, str16_make((u16 *)str, size16));
   scratch_end(scratch);
+  return(result);
+}
+
+internal b32
+file_path_exists(String8 path) {
+  // TODO: 
+  b32 result = 0;
+  return(result);
+}
+
+// NOTE: directories
+
+internal b32
+directory_make(String8 path) {
+  // TODO:
+  b32 result = 0;
+  return(result);
+}
+
+internal b32
+directory_path_exists(String8 path) {
+  // TODO:
+  b32 result = 0;
   return(result);
 }
 
@@ -509,7 +532,7 @@ process_launch(Process_Launch_Params *params) {
 }
 
 internal u64
-pid_from_process(Process process) {
+process_pid(Process process) {
   HANDLE process_handle = (HANDLE)process.v[0];
   u64 result = GetProcessId(process_handle);
   return(result);
@@ -612,7 +635,7 @@ w32_entry_point_caller(int argc, WCHAR **wargv) {
   }
 
   // NOTE: set up thread context
-  Thread_Context *tctx = tctx_alloc();
+  TCTX *tctx = tctx_alloc();
   tctx_select(tctx);
 
   // NOTE: set up dynamically-alloc'd state
