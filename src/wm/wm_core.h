@@ -6,17 +6,11 @@
 
 typedef struct WM_System_Info WM_System_Info;
 struct WM_System_Info {
-  f32 default_refresh_rate;
+  f32 refresh_rate;
 };
 
 ////////////////////////////////
 // NOTE: Window Types
-
-typedef u32 WM_Window_Flags;
-enum {
-  WM_Window_Flag_CUSTOM_BORDER        = (1<<0),
-  WM_Window_Flag_USE_DEFAULT_POSITION = (1<<1),
-};
 
 typedef struct WM_Window WM_Window;
 struct WM_Window {
@@ -28,7 +22,6 @@ struct WM_Window {
 
 typedef enum WM_Key {
   WM_Key_NULL,
-
   WM_Key_ESC,
   WM_Key_F1,
   WM_Key_F2,
@@ -54,7 +47,6 @@ typedef enum WM_Key {
   WM_Key_F22,
   WM_Key_F23,
   WM_Key_F24,
-
   WM_Key_TICK,
   WM_Key_0,
   WM_Key_1,
@@ -69,7 +61,6 @@ typedef enum WM_Key {
   WM_Key_MINUS,
   WM_Key_EQUAL,
   WM_Key_BACKSPACE,
-
   WM_Key_TAB,
   WM_Key_Q,
   WM_Key_W,
@@ -81,11 +72,10 @@ typedef enum WM_Key {
   WM_Key_I,
   WM_Key_O,
   WM_Key_P,
-  WM_Key_LEFTBRACKET,
-  WM_Key_RIGHTBRACKET,
+  WM_Key_LEFT_BRACKET,
+  WM_Key_RIGHT_BRACKET,
   WM_Key_BACKSLASH,
-
-  WM_Key_CAPSLOCK,
+  WM_Key_CAPS_LOCK,
   WM_Key_A,
   WM_Key_S,
   WM_Key_D,
@@ -98,7 +88,6 @@ typedef enum WM_Key {
   WM_Key_SEMICOLON,
   WM_Key_QUOTE,
   WM_Key_RETURN,
-
   WM_Key_SHIFT,
   WM_Key_Z,
   WM_Key_X,
@@ -110,26 +99,22 @@ typedef enum WM_Key {
   WM_Key_COMMA,
   WM_Key_PERIOD,
   WM_Key_SLASH,
-
   WM_Key_CTRL,
   WM_Key_ALT,
   WM_Key_SPACE,
   WM_Key_MENU,
-
-  WM_Key_SCROLLLOCK,
+  WM_Key_SCROLL_LOCK,
   WM_Key_PAUSE,
   WM_Key_INSERT,
   WM_Key_HOME,
-  WM_Key_PAGEUP,
+  WM_Key_PAGE_UP,
   WM_Key_DELETE,
   WM_Key_END,
-  WM_Key_PAGEDOWN,
-
+  WM_Key_PAGE_DOWN,
   WM_Key_UP,
   WM_Key_LEFT,
   WM_Key_DOWN,
   WM_Key_RIGHT,
-
   WM_Key_EX0,
   WM_Key_EX1,
   WM_Key_EX2,
@@ -160,28 +145,25 @@ typedef enum WM_Key {
   WM_Key_EX27,
   WM_Key_EX28,
   WM_Key_EX29,
-
-  WM_Key_NUMLOCK,
-  WM_Key_NUMSLASH,
-  WM_Key_NUMSTAR,
-  WM_Key_NUMMINUS,
-  WM_Key_NUMPLUS,
-  WM_Key_NUMPERIOD,
-  WM_Key_NUM0,
-  WM_Key_NUM1,
-  WM_Key_NUM2,
-  WM_Key_NUM3,
-  WM_Key_NUM4,
-  WM_Key_NUM5,
-  WM_Key_NUM6,
-  WM_Key_NUM7,
-  WM_Key_NUM8,
-  WM_Key_NUM9,
-
-  WM_Key_MOUSE_LEFT,
-  WM_Key_MOUSE_MIDDLE,
-  WM_Key_MOUSE_RIGHT,
-
+  WM_Key_NUM_LOCK,
+  WM_Key_NUM_SLASH,
+  WM_Key_NUM_STAR,
+  WM_Key_NUM_MINUS,
+  WM_Key_NUM_PLUS,
+  WM_Key_NUM_PERIOD,
+  WM_Key_NUM_0,
+  WM_Key_NUM_1,
+  WM_Key_NUM_2,
+  WM_Key_NUM_3,
+  WM_Key_NUM_4,
+  WM_Key_NUM_5,
+  WM_Key_NUM_6,
+  WM_Key_NUM_7,
+  WM_Key_NUM_8,
+  WM_Key_NUM_9,
+  WM_Key_LEFT_MOUSE_BUTTON,
+  WM_Key_MIDDLE_MOUSE_BUTTON,
+  WM_Key_RIGHT_MOUSE_BUTTON,
   WM_Key_COUNT,
 } WM_Key;
 
@@ -192,19 +174,17 @@ typedef enum WM_Event_Type {
   WM_Event_Type_NULL,
   WM_Event_Type_PRESS,
   WM_Event_Type_RELEASE,
-  WM_Event_Type_TEXT_INPUT,
   WM_Event_Type_MOUSE_MOVE,
-  WM_Event_Type_MOUSE_WHEEL,
-  WM_Event_Type_WINDOW_LOSE_FOCUS,
+  WM_Event_Type_TEXT,
+  WM_Event_Type_SCROLL,
   WM_Event_Type_WINDOW_CLOSE,
-  WM_Event_Type_WAKEUP,
   WM_Event_Type_COUNT,
 } WM_Event_Type;
 
 typedef u32 WM_Modifiers;
 enum {
-  WM_Modifier_CTRL  = (1<<0),
-  WM_Modifier_SHIFT = (1<<1),
+  WM_Modifier_SHIFT = (1<<0),
+  WM_Modifier_CTRL  = (1<<1),
   WM_Modifier_ALT   = (1<<2),
 };
 
@@ -216,17 +196,13 @@ struct WM_Event {
   WM_Window window;
   WM_Event_Type type;
   WM_Modifiers modifiers;
-
-  // NOTE: keys
   WM_Key key;
   b32 is_repeat;
   b32 is_right_sided;
   u32 character;
   u32 repeat_count;
-
-  // NOTE: mouse
   Vector2 position;
-  Vector2 wheel_delta;
+  Vector2 delta;
 };
 
 typedef struct WM_Event_List WM_Event_List;
@@ -240,8 +216,9 @@ struct WM_Event_List {
 // NOTE: Cursor Types
 
 typedef enum WM_Cursor {
-  WM_Cursor_NONE,
-  WM_Cursor_POINTER,
+  WM_Cursor_ARROW,
+  WM_Cursor_IBEAM,
+  WM_Cursor_HAND,
   WM_Cursor_COUNT,
 } WM_Cursor;
 
@@ -275,41 +252,30 @@ internal WM_System_Info *wm_get_system_info(void);
 ////////////////////////////////
 // NOTE: @per_os_impl Windows
 
-internal WM_Window wm_window_open(String8 name, Vector2 size, WM_Window_Flags flags);
+internal WM_Window wm_window_open(String8 name, Vector2 size);
 internal void      wm_window_close(WM_Window window);
 internal void      wm_window_first_paint(WM_Window window);
-internal void      wm_window_focus(WM_Window window);
-internal void      wm_window_bring_to_front(WM_Window window);
-internal b32       wm_window_is_focused(WM_Window window);
 internal b32       wm_window_is_fullscreen(WM_Window window);
-internal b32       wm_window_is_maximized(WM_Window window);
-internal b32       wm_window_is_minimized(WM_Window window);
-internal void      wm_window_set_name(WM_Window window, String8 name);
 internal void      wm_window_set_fullscreen(WM_Window window, b32 fullscreen);
+internal b32       wm_window_is_maximized(WM_Window window);
 internal void      wm_window_set_maximized(WM_Window window, b32 maximized);
+internal b32       wm_window_is_minimized(WM_Window window);
 internal void      wm_window_set_minimized(WM_Window window, b32 minimized);
-internal void      wm_window_set_custom_title_thickness(WM_Window handle, f32 thickness);
-internal void      wm_window_set_custom_edge_thickness(WM_Window handle, f32 thickness);
-internal Range2    wm_rect_from_window(WM_Window window);
-internal Range2    wm_client_rect_from_window(WM_Window window);
-internal f32       wm_dpi_from_window(WM_Window window);
+internal void      wm_window_set_name(WM_Window window, String8 name);
+internal Range2    wm_window_get_rect(WM_Window window);
+internal Range2    wm_window_get_client_rect(WM_Window window);
 
 ////////////////////////////////
 // NOTE: @per_os_impl Events
 
-internal void          wm_send_wakeup_event(void);
 internal WM_Event_List wm_get_events(Arena *arena, b32 wait);
 internal WM_Modifiers  wm_get_modifiers(void);
+internal b32           wm_key_is_down(WM_Key key);
 internal Vector2       wm_mouse_from_window(WM_Window window);
 
 ////////////////////////////////
 // NOTE: @per_os_impl Cursors
 
 internal void wm_set_cursor(WM_Cursor cursor);
-
-////////////////////////////////
-// NOTE: @per_os_impl Native User-Facing Graphical Messages
-
-internal void wm_graphical_message(b32 error, String8 title, String8 message);
 
 #endif // WM_CORE_H

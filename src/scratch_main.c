@@ -1,36 +1,29 @@
 #include "base/base.h"
-// #include "wm/wm.h"
+#include "wm/wm.h"
 
 #include "base/base.c"
-// #include "wm/wm.c"
+#include "wm/wm.c"
 
 internal void
 entry_point(int argc, char **argv) {
-  String8 os_str = string_from_operating_system(Operating_System_CURRENT);
-  String8 arch_str = string_from_arch(Arch_CURRENT);
-  String8 cc_str = string_from_compiler(Compiler_CURRENT);
-  printf("--- Build Info ----------------------\n");
-  printf("os: %.*s\n", str8_fmt(os_str));
-  printf("arch: %.*s\n", str8_fmt(arch_str));
-  printf("cc: %.*s\n", str8_fmt(cc_str));
-  printf("\n");
+  String8 window_name = s("misery");
+  Vector2 window_size = vec2(800, 600);
 
-  System_Info *sinfo = get_system_info();
-  printf("--- System Info ---------------------\n");
-  printf("logical_processor_count: %d\n", sinfo->logical_processor_count);
-  printf("page_size: %lu\n", sinfo->page_size);
-  printf("allocation_granularity: %lu\n", sinfo->allocation_granularity);
-  printf("machine_name: %.*s\n", str8_fmt(sinfo->machine_name));
-  printf("\n");
+  WM_Window window = wm_window_open(window_name, window_size);
+  wm_window_first_paint(window);
 
-  Process_Info *pinfo = get_process_info();
-  printf("--- Process Info --------------------\n");
-  printf("pid: %d\n", pinfo->pid);
-  printf("exec_file_path: %.*s\n", str8_fmt(pinfo->exec_file_path));
-  printf("exec_path: %.*s\n", str8_fmt(pinfo->exec_path));
-  printf("init_path: %.*s\n", str8_fmt(pinfo->init_path));
-  printf("\n");
+  for (b32 should_quit = 0; !should_quit;) {
+    Temp scratch = scratch_begin(0, 0);
+    WM_Event_List events = wm_get_events(scratch.arena, 0);
+    for_each_node(WM_Event, event, events.first) {
+      switch (event->type) {
+        case WM_Event_Type_WINDOW_CLOSE: {
+          should_quit = 1;
+        } break;
+      }
+    }
+    scratch_end(scratch);
+  }
 
-  Process process = launch_cmd_line(s("echo hello, misery."));
-  process_join(process, max_u64, 0);
+  wm_window_close(window);
 }

@@ -643,7 +643,7 @@ main(int argc, char **argv) {
     {
       Temp scratch = scratch_begin(0, 0);
       Process_Info *info = &lnx_state.process_info;
-      
+
       // NOTE: grab exec file path
       {
         // NOTE: get self string
@@ -660,7 +660,7 @@ main(int argc, char **argv) {
           }
         }
 
-        // NOTE: save
+        // NOTE: save string
         if (got_final_result && size > 0) {
           String8 exec_file_path = str8_make(buffer, size);
           info->exec_file_path = str8_copy(lnx_state.arena, exec_file_path);

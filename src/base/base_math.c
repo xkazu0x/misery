@@ -1,5 +1,5 @@
 ////////////////////////////////
-// NOTE: Scalar Math Ops
+// NOTE: Scalar Math
 
 internal f32
 lerp_f32(f32 a, f32 b, f32 t) {
@@ -14,7 +14,7 @@ lerpc_f32(f32 a, f32 b, f32 t) {
 }
 
 ////////////////////////////////
-// NOTE: Vector Ops
+// NOTE: Vectors
 
 // NOTE: vector2
 
@@ -417,7 +417,7 @@ vector4_norm(Vector4 v) {
 }
 
 ////////////////////////////////
-// NOTE: Matrix Ops
+// NOTE: Matrices
 
 internal Matrix4x4
 matrix4x4_identity(void) {
@@ -611,7 +611,7 @@ matrix4x4_mul3(Matrix4x4 m, Vector3 v, f32 w) {
 }
 
 ////////////////////////////////
-// NOTE: Range Ops
+// NOTE: Ranges
 
 internal Range2
 range2_zero(void) {

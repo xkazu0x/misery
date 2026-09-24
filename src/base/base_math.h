@@ -47,7 +47,7 @@ union Range2 {
 };
 
 ////////////////////////////////
-// NOTE: Scalar Math Ops
+// NOTE: Scalar Math
 
 #define abs_s64(x) (s64)llabs(x)
 
@@ -79,9 +79,10 @@ internal f32 lerp_f32(f32 a, f32 b, f32 t);
 internal f32 lerpc_f32(f32 a, f32 b, f32 t);
 
 ////////////////////////////////
-// NOTE: Vector Ops
+// NOTE: Vectors
 
 // NOTE: vector2
+#define vec2(x,y) vector2_make((x),(y))
 internal Vector2 vector2_zero(void);
 internal Vector2 vector2_fill(f32 n);
 internal Vector2 vector2_make(f32 x, f32 y);
@@ -105,6 +106,7 @@ internal f32 vector2_norm2(Vector2 v);
 internal f32 vector2_norm(Vector2 v);
 
 // NOTE: vector3
+#define vec3(x,y,z) vector3_make((x),(y),(z))
 internal Vector3 vector3_zero(void);
 internal Vector3 vector3_fill(f32 n);
 internal Vector3 vector3_make(f32 x, f32 y, f32 z);
@@ -129,6 +131,7 @@ internal f32 vector3_norm2(Vector3 v);
 internal f32 vector3_norm(Vector3 v);
 
 // NOTE: vector4
+#define vec4(x,y,z,w) vector3_make((x),(y),(z),(w))
 internal Vector4 vector4_zero(void);
 internal Vector4 vector4_fill(f32 n);
 internal Vector4 vector4_make(f32 x, f32 y, f32 z, f32 w);
@@ -151,7 +154,7 @@ internal f32 vector4_norm2(Vector4 v);
 internal f32 vector4_norm(Vector4 v);
 
 ////////////////////////////////
-// NOTE: Matrix Ops
+// NOTE: Matrices
 
 // NOTE: all matrix ops treat the memory as row major.
 internal Matrix4x4 matrix4x4_identity(void);
@@ -169,7 +172,7 @@ internal Vector4 matrix4x4_mul4(Matrix4x4 m, Vector4 v);
 internal Vector3 matrix4x4_mul3(Matrix4x4 m, Vector3 v, f32 w);
 
 ////////////////////////////////
-// NOTE: Range Ops
+// NOTE: Ranges
 
 internal Range2 range2_zero(void);
 internal Range2 range2_make(f32 x0, f32 y0, f32 x1, f32 y1);
