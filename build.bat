@@ -22,14 +22,15 @@ set cl_debug=       call cl /Od /Ob1 /DBUILD_DEBUG=1 %cl_common% %auto_compile_f
 set cl_release=     call cl /O2 /DBUILD_DEBUG=0 %cl_common% %auto_compile_flags%
 set cl_link=        /link /incremental:no /opt:ref /opt:icf
 set cl_out=         /out:
-set cl_obj_out=     /Fo:
+set cl_out_obj=     /Fo:
 set cl_linker=
+
 set clang_common=   -I..\src\ -fdiagnostics-absolute-paths -D_CRT_SECURE_NO_WARNINGS -Wall -Wextra -Wno-unused-function -Wno-unused-variable -Wno-unused-parameter -Wno-initializer-overrides -Wno-missing-braces -Wno-missing-field-initializers -Wno-switch
 set clang_debug=    call clang -O0 -g -DBUILD_DEBUG=1 %clang_common% %auto_compile_flags%
 set clang_release=  call clang -O2 -g -DBUILD_DEBUG=0 %clang_common% %auto_compile_flags%
 set clang_link=     -Xlinker /opt:ref -Xlinker /opt:icf
 set clang_out=      -o
-set clang_obj_out=  -o
+set clang_out_obj=  -o
 set clang_linker=   -Xlinker
 
 :: --- Per-Build Settings --------------------------------------
@@ -47,34 +48,35 @@ if "%clang%"=="1" set link_dll=-Xlinker -DLL
 set link_freetype=-I..\src\third_party\freetype-2.14.3\include freetype.lib
 
 :: --- Choose Compile/Link -------------------------------------
-if "%msvc%"=="1"    set compile_debug=%cl_debug%
-if "%msvc%"=="1"    set compile_release=%cl_release%
-if "%msvc%"=="1"    set compile_link=%cl_link%
+if "%msvc%"=="1"    set cc_debug=%cl_debug%
+if "%msvc%"=="1"    set cc_release=%cl_release%
+if "%msvc%"=="1"    set cc_link=%cl_link%
 if "%msvc%"=="1"    set out=%cl_out%
-if "%msvc%"=="1"    set obj_out=%cl_obj_out%
-if "%clang%"=="1"   set compile_debug=%clang_debug%
-if "%clang%"=="1"   set compile_release=%clang_release%
-if "%clang%"=="1"   set compile_link=%clang_link%
-if "%clang%"=="1"   set out=%clang_out%
-if "%clang%"=="1"   set obj_out=%clang_obj_out%
-if "%debug%"=="1"   set compile=%compile_debug%
-if "%release%"=="1" set compile=%compile_release%
+if "%msvc%"=="1"    set out_obj=%cl_out_obj%
 
-:: --- Prep Directories ----------------------------------------
-if "%clean%"=="1" if exist build rmdir /s /q build
+if "%clang%"=="1"   set cc_debug=%clang_debug%
+if "%clang%"=="1"   set cc_release=%clang_release%
+if "%clang%"=="1"   set cc_link=%clang_link%
+if "%clang%"=="1"   set out=%clang_out%
+if "%clang%"=="1"   set out_obj=%clang_out_obj%
+
+if "%debug%"=="1"   set compile=%cc_debug%
+if "%release%"=="1" set compile=%cc_release%
+
+:: --- Prep Directories -------------------------------------------------------
 if not exist build mkdir build
 
-:: --- Produce Logo Icon File ----------------------------------
-:: pushd build
-:: %rc% /nologo /fo logo.res ..\data\logo.rc || exit /b 1
-:: popd
+:: --- Produce Logo Icon File -------------------------------------------------
+REM pushd build
+REM %rc% /nologo /fo logo.res ..\data\logo.rc || exit /b 1
+REM popd
 
-:: --- Build FreeType ------------------------------------------
-if not exist build\freetype.lib set freetype=1
-if "%freetype%"=="1" call build_freetype.bat || exit /b 1
+:: --- Build FreeType ---------------------------------------------------------
+REM if not exist build\freetype.lib set freetype=1
+REM if "%freetype%"=="1" call build_freetype.bat || exit /b 1
 
-:: --- Build Misery --------------------------------------------
+:: --- Build ------------------------------------------------------------------
 pushd build
-%compile% ..\src\misery_main.c %link_freetype% %compile_link% %out%misery.exe || exit /b 1
-if "%run%"=="1" call misery.exe
+%compile% ..\src\scratch_main.c %cc_link% %out%scratch.exe || exit /b 1
+if "%run%"=="1" call scratch.exe
 popd

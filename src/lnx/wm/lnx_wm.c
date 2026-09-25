@@ -732,8 +732,8 @@ wm_key_is_down(WM_Key key) {
   XQueryKeymap(lnx_wm_state->display, keys);
   KeySym sym = lnx_wm_keysym_from_key(key);
   KeyCode code = XKeysymToKeycode(lnx_wm_state->display, sym);
-  b32 is_down = !!(keys[code/8] & (1u << (code % 8)));
-  return(is_down);
+  b32 result = !!(keys[code/8] & (1u << (code % 8)));
+  return(result);
 }
 
 internal Vector2
