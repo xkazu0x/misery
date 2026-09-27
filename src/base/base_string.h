@@ -118,7 +118,7 @@ internal u64 cstr32_len(u32 *cstr);
 #define str8_lit(s) str8_make((u8 *)(s), sizeof(s) - 1)
 #define str8_lit_comp(s) {(u8 *)(s), sizeof(s) - 1}
 #define str8_lit_cstr(s) str8_make((u8 *)(s), sizeof(s))
-#define str8_fmt(s) (int)((s).size), ((s).str)
+#define str8_varg(s) (int)((s).size), ((s).str)
 
 internal String8 str8_zero(void);
 internal String8 str8_make(u8 *str, u64 size);

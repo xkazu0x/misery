@@ -228,10 +228,11 @@ typedef enum WM_Cursor {
 internal b32 frame(void);
 
 ////////////////////////////////
-// NOTE: Handle Type Helpers
+// NOTE: Window Helpers
 
 internal WM_Window wm_window_zero(void);
 internal b32       wm_window_match(WM_Window a, WM_Window b);
+internal Vector2   wm_window_get_size(WM_Window window);
 
 ////////////////////////////////
 // NOTE: Event Helpers
@@ -255,13 +256,13 @@ internal WM_System_Info *wm_get_system_info(void);
 internal WM_Window wm_window_open(String8 name, Vector2 size);
 internal void      wm_window_close(WM_Window window);
 internal void      wm_window_first_paint(WM_Window window);
+internal void      wm_window_set_name(WM_Window window, String8 name);
 internal b32       wm_window_is_fullscreen(WM_Window window);
 internal void      wm_window_set_fullscreen(WM_Window window, b32 fullscreen);
 internal b32       wm_window_is_maximized(WM_Window window);
 internal void      wm_window_set_maximized(WM_Window window, b32 maximized);
 internal b32       wm_window_is_minimized(WM_Window window);
 internal void      wm_window_set_minimized(WM_Window window, b32 minimized);
-internal void      wm_window_set_name(WM_Window window, String8 name);
 internal Range2    wm_window_get_rect(WM_Window window);
 internal Range2    wm_window_get_client_rect(WM_Window window);
 

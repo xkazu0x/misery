@@ -2,9 +2,9 @@
 // NOTE: Helpers
 
 internal WM_Window
-lnx_wm_handle_from_window(LNX_WM_Window *window) {
+lnx_wm_handle_from_window(LNX_WM_Window *w) {
   WM_Window result = {0};
-  result.v[0] = (u64)window;
+  result.v[0] = (u64)w;
   return(result);
 }
 
@@ -28,21 +28,21 @@ lnx_wm_window_from_x11_window(Window window) {
 
 internal LNX_WM_Window *
 lnx_wm_window_alloc(void) {
-  LNX_WM_Window *window = lnx_wm_state->first_free_window;
-  if (window != 0) {
+  LNX_WM_Window *result = lnx_wm_state->first_free_window;
+  if (result != 0) {
     sll_stack_pop(lnx_wm_state->first_free_window);
   } else {
-    window = push_array_no_zero(lnx_wm_state->arena, LNX_WM_Window, 1);
+    result = push_array_no_zero(lnx_wm_state->arena, LNX_WM_Window, 1);
   }
-  memory_zero_struct(window);
-  dll_push_back(lnx_wm_state->first_window, lnx_wm_state->last_window, window);
-  return(window);
+  memory_zero_struct(result);
+  dll_push_back(lnx_wm_state->first_window, lnx_wm_state->last_window, result);
+  return(result);
 }
 
 internal void
-lnx_wm_window_release(LNX_WM_Window *window) {
-  dll_remove(lnx_wm_state->first_window, lnx_wm_state->last_window, window);
-  sll_stack_push(lnx_wm_state->first_free_window, window);
+lnx_wm_window_release(LNX_WM_Window *w) {
+  dll_remove(lnx_wm_state->first_window, lnx_wm_state->last_window, w);
+  sll_stack_push(lnx_wm_state->first_free_window, w);
 }
 
 internal WM_Key
@@ -144,7 +144,7 @@ lnx_wm_key_from_keysym(KeySym ks, b32 *out_is_right_sided) {
 internal KeySym
 lnx_wm_keysym_from_key(WM_Key key) {
   KeySym ks = 0;
-  switch(key) {
+  switch (key) {
     case WM_Key_ESC:{ks = XK_Escape;}break;
     case WM_Key_F1:{ks = XK_F1;}break;
     case WM_Key_F2:{ks = XK_F2;}break;
@@ -302,8 +302,28 @@ wm_get_system_info(void) {
 internal WM_Window
 wm_window_open(String8 name, Vector2 size) {
   LNX_WM_Window *w = lnx_wm_window_alloc();
-  s32 screen = DefaultScreen(lnx_wm_state->display);
 
+  Visual  *window_visual   = lnx_wm_state->window_visual;
+  int      window_depth    = lnx_wm_state->window_depth;
+  Colormap window_colormap = lnx_wm_state->window_colormap;
+
+  unsigned long window_attrs_mask = 0;
+  XSetWindowAttributes window_attrs = {0};
+
+  if (window_visual == 0) {
+    window_visual = (Visual *)CopyFromParent;
+    window_depth = CopyFromParent;
+    window_attrs.background_pixel = 0;
+    window_attrs.border_pixel = 0;
+    window_attrs_mask = CWBackPixel|CWBorderPixel;
+  } else {
+    window_attrs.background_pixel = None;
+    window_attrs.border_pixel = 0;
+    window_attrs.colormap = window_colormap;
+    window_attrs_mask = CWBackPixel|CWBorderPixel|CWColormap;
+  }
+
+  s32 screen = DefaultScreen(lnx_wm_state->display);
   s32 monitor_w = DisplayWidth(lnx_wm_state->display, screen);
   s32 monitor_h = DisplayHeight(lnx_wm_state->display, screen);
 
@@ -313,22 +333,16 @@ wm_window_open(String8 name, Vector2 size) {
   s32 window_x = (monitor_w - window_w)/2;
   s32 window_y = (monitor_w - window_h)/2;
 
-  s32 attrs_mask = CWBackPixel|CWBorderPixel|CWColormap;
-  XSetWindowAttributes attrs = {0};
-  attrs.background_pixel = 0;
-  attrs.border_pixel = 0;
-  attrs.colormap = 0;
-
   w->window = XCreateWindow(lnx_wm_state->display,
                             XDefaultRootWindow(lnx_wm_state->display),
                             window_x, window_y,
                             window_w, window_h,
                             0,
-                            CopyFromParent,
+                            window_depth,
                             InputOutput,
-                            CopyFromParent,
-                            attrs_mask,
-                            &attrs);
+                            window_visual,
+                            window_attrs_mask,
+                            &window_attrs);
   XSelectInput(lnx_wm_state->display, w->window,
                ExposureMask|
                PointerMotionMask|
@@ -337,7 +351,10 @@ wm_window_open(String8 name, Vector2 size) {
                KeyPressMask|
                KeyReleaseMask|
                StructureNotifyMask);
-  XSetWMProtocols(lnx_wm_state->display, w->window, &lnx_wm_state->wm_delete_window_atom, 1);
+  Atom protocols[] = {
+    lnx_wm_state->wm_delete_window_atom,
+  };
+  XSetWMProtocols(lnx_wm_state->display, w->window, protocols, array_count(protocols));
 
   w->xic = XCreateIC(lnx_wm_state->xim,
                      XNInputStyle, XIMPreeditNothing|XIMStatusNothing,
@@ -355,28 +372,39 @@ wm_window_open(String8 name, Vector2 size) {
 }
 
 internal void
-wm_window_close(WM_Window handle) {
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
-    XDestroyWindow(lnx_wm_state->display, window->window);
-    lnx_wm_window_release(window);
+wm_window_close(WM_Window window) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
+    XDestroyWindow(lnx_wm_state->display, w->window);
+    lnx_wm_window_release(w);
   }
 }
 
 internal void
-wm_window_first_paint(WM_Window handle) {
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
-    XMapWindow(lnx_wm_state->display, window->window);
+wm_window_first_paint(WM_Window window) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
+    XMapWindow(lnx_wm_state->display, w->window);
     XFlush(lnx_wm_state->display);
   }
 }
 
+internal void
+wm_window_set_name(WM_Window window, String8 name) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
+    Temp scratch = scratch_begin(0, 0);
+    String8 name_copy = str8_copy(scratch.arena, name);
+    XStoreName(lnx_wm_state->display, w->window, (char *)name_copy.str);
+    scratch_end(scratch);
+  }
+}
+
 internal b32
-wm_window_is_fullscreen(WM_Window handle) {
+wm_window_is_fullscreen(WM_Window window) {
   b32 result = 0;
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
     Atom wm_state_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
     Atom wm_state_fullscreen_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_FULLSCREEN", 0);
 
@@ -387,7 +415,7 @@ wm_window_is_fullscreen(WM_Window handle) {
       int actual_format;
       unsigned long bytes_after;
       int result = XGetWindowProperty(lnx_wm_state->display,
-                                      window->window,
+                                      w->window,
                                       wm_state_atom,
                                       0,
                                       1024,
@@ -398,7 +426,6 @@ wm_window_is_fullscreen(WM_Window handle) {
                                       &props_count,
                                       &bytes_after,
                                       (unsigned char **)&props);
-      (void)result;
     }
 
     for (unsigned long idx = 0; idx < props_count; idx += 1) {
@@ -414,14 +441,14 @@ wm_window_is_fullscreen(WM_Window handle) {
 }
 
 internal void
-wm_window_set_fullscreen(WM_Window handle, b32 fullscreen) {
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
+wm_window_set_fullscreen(WM_Window window, b32 fullscreen) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
     XEvent event;
     memory_zero_struct(&event);
     event.type = ClientMessage;
     event.xclient.display = lnx_wm_state->display;
-    event.xclient.window = window->window;
+    event.xclient.window = w->window;
     event.xclient.message_type = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
     event.xclient.format = 32;
     event.xclient.data.l[0] = !!fullscreen;
@@ -433,10 +460,10 @@ wm_window_set_fullscreen(WM_Window handle, b32 fullscreen) {
 }
 
 internal b32
-wm_window_is_maximized(WM_Window handle) {
+wm_window_is_maximized(WM_Window window) {
   b32 result = 0;
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
     Atom wm_state_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
     Atom wm_state_max_x_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_MAXIMIZED_HORZ", 0);
     Atom wm_state_max_y_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_MAXIMIZED_VERT", 0);
@@ -448,7 +475,7 @@ wm_window_is_maximized(WM_Window handle) {
       int actual_format;
       unsigned long bytes_after;
       int result = XGetWindowProperty(lnx_wm_state->display,
-                                      window->window,
+                                      w->window,
                                       wm_state_atom,
                                       0,
                                       1024,
@@ -459,7 +486,6 @@ wm_window_is_maximized(WM_Window handle) {
                                       &props_count,
                                       &bytes_after,
                                       (unsigned char **)&props);
-      (void)result;
     }
 
     b32 is_max_x_set = 0;
@@ -476,14 +502,14 @@ wm_window_is_maximized(WM_Window handle) {
 }
 
 internal void
-wm_window_set_maximized(WM_Window handle, b32 maximized) {
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
+wm_window_set_maximized(WM_Window window, b32 maximized) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
     XEvent event;
     memory_zero_struct(&event);
     event.type = ClientMessage;
     event.xclient.display = lnx_wm_state->display;
-    event.xclient.window = window->window;
+    event.xclient.window = w->window;
     event.xclient.message_type = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
     event.xclient.format = 32;
     event.xclient.data.l[0] = !!maximized;
@@ -496,10 +522,10 @@ wm_window_set_maximized(WM_Window handle, b32 maximized) {
 }
 
 internal b32
-wm_window_is_minimized(WM_Window handle) {
+wm_window_is_minimized(WM_Window window) {
   b32 result = 0;
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
     Atom wm_state = XInternAtom(lnx_wm_state->display, "WM_STATE", 0);
 
     unsigned long props_count = 0;
@@ -509,7 +535,7 @@ wm_window_is_minimized(WM_Window handle) {
       int actual_format;
       unsigned long bytes_after = 0;
       int result = XGetWindowProperty(lnx_wm_state->display,
-                                      window->window,
+                                      w->window,
                                       wm_state,
                                       0,
                                       1024,
@@ -532,46 +558,35 @@ wm_window_is_minimized(WM_Window handle) {
 }
 
 internal void
-wm_window_set_minimized(WM_Window handle, b32 minimized) {
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
-    XIconifyWindow(lnx_wm_state->display, window->window, DefaultScreen(lnx_wm_state->display));
+wm_window_set_minimized(WM_Window window, b32 minimized) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
+    XIconifyWindow(lnx_wm_state->display, w->window, DefaultScreen(lnx_wm_state->display));
   } else {
-    XMapWindow(lnx_wm_state->display, window->window);
+    XMapWindow(lnx_wm_state->display, w->window);
   }
   XFlush(lnx_wm_state->display);
 }
 
-internal void
-wm_window_set_name(WM_Window handle, String8 name) {
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
-    Temp scratch = scratch_begin(0, 0);
-    String8 name_copy = str8_copy(scratch.arena, name);
-    XStoreName(lnx_wm_state->display, window->window, (char *)name_copy.str);
-    scratch_end(scratch);
-  }
-}
-
 internal Range2
-wm_window_get_rect(WM_Window handle) {
+wm_window_get_rect(WM_Window window) {
   Range2 result = {0};
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
     XWindowAttributes attrs = {0};
-    Status status = XGetWindowAttributes(lnx_wm_state->display, window->window, &attrs);
+    Status status = XGetWindowAttributes(lnx_wm_state->display, w->window, &attrs);
     result = range2_make((f32)attrs.x, (f32)attrs.y, (f32)(attrs.x+attrs.width), (f32)(attrs.y+attrs.height));
   }
   return(result);
 }
 
 internal Range2
-wm_window_get_client_rect(WM_Window handle) {
+wm_window_get_client_rect(WM_Window window) {
   Range2 result = {0};
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
     XWindowAttributes attrs = {0};
-    Status status = XGetWindowAttributes(lnx_wm_state->display, window->window, &attrs);
+    Status status = XGetWindowAttributes(lnx_wm_state->display, w->window, &attrs);
     result = range2_make(0, 0, (f32)attrs.width, (f32)attrs.height);
   }
   return(result);
@@ -607,7 +622,7 @@ wm_get_events(Arena *arena, b32 wait) {
       switch (event.type) {
         case KeyPress:
         case KeyRelease: {
-          LNX_WM_Window *window = lnx_wm_window_from_x11_window(event.xkey.window);
+          LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xkey.window);
 
           WM_Modifiers modifiers = 0;
           if (event.xbutton.state & ShiftMask)   {modifiers |= WM_Modifier_SHIFT;}
@@ -616,7 +631,7 @@ wm_get_events(Arena *arena, b32 wait) {
 
           KeySym keysym = 0;
           u8 text[256] = {0};
-          u64 text_size = Xutf8LookupString(window->xic, &event.xkey, (char *)text, sizeof(text), &keysym, 0);
+          u64 text_size = Xutf8LookupString(w->xic, &event.xkey, (char *)text, sizeof(text), &keysym, 0);
 
           b32 is_right_sided = 0;
           WM_Key key = lnx_wm_key_from_keysym(keysym, &is_right_sided);
@@ -626,7 +641,7 @@ wm_get_events(Arena *arena, b32 wait) {
               Unicode_Decode decode = utf8_decode(text+off, text_size-off);
               if (decode.codepoint != 0 && decode.codepoint != 127 && decode.codepoint >= 32) {
                 WM_Event *e = wm_event_list_push(arena, &events, WM_Event_Type_TEXT);
-                e->window = lnx_wm_handle_from_window(window);
+                e->window = lnx_wm_handle_from_window(w);
                 e->character = decode.codepoint;
               }
               if (decode.increment == 0) {
@@ -637,7 +652,7 @@ wm_get_events(Arena *arena, b32 wait) {
           }
 
           WM_Event *e = wm_event_list_push(arena, &events, event.type == KeyPress ? WM_Event_Type_PRESS : WM_Event_Type_RELEASE);
-          e->window = lnx_wm_handle_from_window(window);
+          e->window = lnx_wm_handle_from_window(w);
           e->modifiers = modifiers;
           e->key = key;
           e->is_right_sided = is_right_sided;
@@ -645,7 +660,7 @@ wm_get_events(Arena *arena, b32 wait) {
 
         case ButtonPress:
         case ButtonRelease: {
-          LNX_WM_Window *window = lnx_wm_window_from_x11_window(event.xbutton.window);
+          LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xbutton.window);
 
           WM_Modifiers modifiers = 0;
           if (event.xbutton.state & ShiftMask)   {modifiers |= WM_Modifier_SHIFT;}
@@ -661,14 +676,14 @@ wm_get_events(Arena *arena, b32 wait) {
 
           if (key != WM_Key_NULL) {
             WM_Event *e = wm_event_list_push(arena, &events, event.type == ButtonPress ? WM_Event_Type_PRESS : WM_Event_Type_RELEASE);
-            e->window = lnx_wm_handle_from_window(window);
+            e->window = lnx_wm_handle_from_window(w);
             e->modifiers = modifiers;
             e->key = key;
             e->position = vector2_make((f32)event.xbutton.x, (f32)event.xbutton.y);
           }
           else if(event.xbutton.button == Button4 || event.xbutton.button == Button5) {
             WM_Event *e = wm_event_list_push(arena, &events, WM_Event_Type_SCROLL);
-            e->window = lnx_wm_handle_from_window(window);
+            e->window = lnx_wm_handle_from_window(w);
             e->modifiers = modifiers;
             e->position = vector2_make((f32)event.xbutton.x, (f32)event.xbutton.y);
             e->delta = vector2_make(0, event.xbutton.button == Button4 ? -1.0f : +1.0f);
@@ -676,9 +691,9 @@ wm_get_events(Arena *arena, b32 wait) {
         } break;
 
         case MotionNotify: {
-          LNX_WM_Window *window = lnx_wm_window_from_x11_window(event.xclient.window);
+          LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xclient.window);
           WM_Event *e = wm_event_list_push(arena, &events, WM_Event_Type_MOUSE_MOVE);
-          e->window = lnx_wm_handle_from_window(window);
+          e->window = lnx_wm_handle_from_window(w);
           e->position.x = (f32)event.xmotion.x;
           e->position.y = (f32)event.xmotion.y;
           set_mouse_cursor = 1;
@@ -690,9 +705,9 @@ wm_get_events(Arena *arena, b32 wait) {
 
         case ClientMessage: {
           if ((Atom)event.xclient.data.l[0] == lnx_wm_state->wm_delete_window_atom) {
-            LNX_WM_Window *window = lnx_wm_window_from_x11_window(event.xclient.window);
+            LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xclient.window);
             WM_Event *e = wm_event_list_push(arena, &events, WM_Event_Type_WINDOW_CLOSE);
-            e->window = lnx_wm_handle_from_window(window);
+            e->window = lnx_wm_handle_from_window(w);
           }
         } break;
       }
@@ -737,10 +752,10 @@ wm_key_is_down(WM_Key key) {
 }
 
 internal Vector2
-wm_mouse_from_window(WM_Window handle) {
+wm_mouse_from_window(WM_Window window) {
   Vector2 result = {0};
-  LNX_WM_Window *window = lnx_wm_window_from_handle(handle);
-  if (window != 0) {
+  LNX_WM_Window *w = lnx_wm_window_from_handle(window);
+  if (w != 0) {
     Window root_window = 0;
     Window child_window = 0;
     int root_rel_x = 0;
@@ -748,7 +763,7 @@ wm_mouse_from_window(WM_Window handle) {
     int child_rel_x = 0;
     int child_rel_y = 0;
     unsigned int mask = 0;
-    if (XQueryPointer(lnx_wm_state->display, window->window, &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask)) {
+    if (XQueryPointer(lnx_wm_state->display, w->window, &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask)) {
       result.x = (f32)child_rel_x;
       result.y = (f32)child_rel_y;
     }

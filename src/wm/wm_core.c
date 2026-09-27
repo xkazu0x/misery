@@ -1,5 +1,5 @@
 ////////////////////////////////
-// NOTE: Handle Type Helpers
+// NOTE: Window Helpers
 
 internal WM_Window
 wm_window_zero(void) {
@@ -10,6 +10,13 @@ wm_window_zero(void) {
 internal b32
 wm_window_match(WM_Window a, WM_Window b) {
   b32 result = memory_match_struct(&a, &b);
+  return(result);
+}
+
+internal Vector2
+wm_window_get_size(WM_Window window) {
+  Range2 r = wm_window_get_client_rect(window);
+  Vector2 result = vector2_make(r.x1-r.x0, r.y1-r.y0);
   return(result);
 }
 

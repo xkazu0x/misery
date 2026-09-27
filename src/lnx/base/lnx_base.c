@@ -335,7 +335,7 @@ file_iter_next(Arena *arena, File_Iter iter, File_Info *info_out) {
     int stat_result = 0;
     if (good) {
       Temp scratch = scratch_begin(&arena, 1);
-      String8 full_path = str8f(scratch.arena, "%.*s/%s", str8_fmt(lnx_iter->path), lnx_iter->dp->d_name);
+      String8 full_path = str8f(scratch.arena, "%.*s/%s", str8_varg(lnx_iter->path), lnx_iter->dp->d_name);
       stat_result = stat((char *)full_path.str, &st);
       scratch_end(scratch);
     }
