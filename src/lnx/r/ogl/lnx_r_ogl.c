@@ -64,8 +64,8 @@ r_ogl_init(void) {
     debug_mode = 1;
 #endif
 
-    glXCreateContextAttribsARB_Proc glXCreateContextAttribsARB = 0;
-    glXCreateContextAttribsARB = (glXCreateContextAttribsARB_Proc)glXGetProcAddressARB((u8 *)"glXCreateContextAttribsARB");
+    glXCreateContextAttribsARB_Proc_Type glXCreateContextAttribsARB = 0;
+    glXCreateContextAttribsARB = (glXCreateContextAttribsARB_Proc_Type)glXGetProcAddressARB((u8 *)"glXCreateContextAttribsARB");
 
     int ctx_attrs[] = {
       GLX_CONTEXT_MAJOR_VERSION_ARB, 3,

@@ -17,7 +17,7 @@ if "%asan%"=="1"  set auto_compile_flags=%auto_compile_flags% -fsanitize=address
 if "%ubsan%"=="1" set auto_compile_flags=%auto_compile_flags% -fsanitize=undefined && echo [ubsan enabled]
 
 :: --- Compile/Link Definitions --------------------------------
-set cl_common=      /I..\src\ /nologo /FC /Z7 /Zc:preprocessor /D_CRT_SECURE_NO_WARNINGS /W4 /wd4061 /wd4062 /wd4100 /wd4191 /wd4200 /wd4201 /wd4310 /wd4668 /wd4702 /wd4820 /wd5045
+set cl_common=      /I..\src\ /nologo /FC /Z7 /Zc:preprocessor /D_CRT_SECURE_NO_WARNINGS /W4 /wd4061 /wd4062 /wd4100 /wd4189 /wd4191 /wd4200 /wd4201 /wd4310 /wd4668 /wd4702 /wd4820 /wd5045
 set cl_debug=       call cl /Od /Ob1 /DBUILD_DEBUG=1 %cl_common% %auto_compile_flags%
 set cl_release=     call cl /O2 /DBUILD_DEBUG=0 %cl_common% %auto_compile_flags%
 set cl_link=        /link /incremental:no /opt:ref /opt:icf

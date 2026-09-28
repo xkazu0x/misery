@@ -9,7 +9,7 @@
 #define GLX_CONTEXT_FLAGS_ARB                  0x2094
 #define GLX_CONTEXT_DEBUG_BIT_ARB              0x00000001
 #define GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB 0x00000002
-typedef GLXContext (*glXCreateContextAttribsARB_Proc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
+typedef GLXContext (*glXCreateContextAttribsARB_Proc_Type)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
 global GLXContext r_ogl_lnx_ctx = 0;
 

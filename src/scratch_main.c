@@ -1,5 +1,4 @@
 #define WM_INIT_MANUAL
-#define R_INIT_MANUAL
 
 #include "base/base.h"
 #include "wm/wm.h"
@@ -29,17 +28,22 @@ global String8 r_ogl_fshad_src = str8_lit_comp(
   "}"
 );
 
-typedef struct STT STT;
-struct STT {
+typedef struct R_OGL_State R_OGL_State;
+struct R_OGL_State {
   Arena *arena;
-  WM_Window window;
-
   GLuint program;
   GLuint all_purpose_vao;
   GLuint vbo;
 };
 
-global STT *stt = 0;
+typedef struct M_State M_State;
+struct M_State {
+  Arena *arena;
+  WM_Window window;
+};
+
+global R_OGL_State *r_ogl_state = 0;
+global M_State *m_state = 0;
 
 internal b32
 frame(void) {
@@ -54,54 +58,48 @@ frame(void) {
     }
   }
 
-  Vector2 window_size = wm_window_get_size(stt->window);
-  r_ogl_window_select(stt->window);
+  Vector2 window_size = wm_window_get_size(m_state->window);
+  r_ogl_window_select(m_state->window);
 
-  glViewport(0, 0, window_size.x, window_size.y);
+  glViewport(0, 0, (GLsizei)window_size.x, (GLsizei)window_size.y);
   glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
 
-  glUseProgram(stt->program);
-  glBindVertexArray(stt->all_purpose_vao);
+  {
+    glUseProgram(r_ogl_state->program);
+    glBindVertexArray(r_ogl_state->all_purpose_vao);
+    {
+      glBindBuffer(GL_ARRAY_BUFFER, r_ogl_state->vbo);
+      glEnableVertexAttribArray(0);
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(f32), (void *)0);
+      glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+    glBindVertexArray(0);
+    glUseProgram(0);
+  }
 
-  glBindBuffer(GL_ARRAY_BUFFER, stt->vbo);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(f32), (void *)0);
-
-  glDrawArrays(GL_TRIANGLES, 0, 3);
-
-  glBindVertexArray(0);
-  glUseProgram(0);
-
-  r_ogl_window_swap(stt->window);
+  r_ogl_window_swap(m_state->window);
 
   scratch_end(scratch);
   return(should_quit);
 }
 
 internal void
-entry_point(int argc, char **argv) {
-  wm_init();
+r_init(void) {
+  // NOTE: do os-specific portion of work
   r_ogl_init();
 
-#define X(name, r, p)\
-  name = (name##_Proc *)r_ogl_load_proc(#name);\
-  assert_always(name != 0);
+  // NOTE: top-level initialization
+  Arena *arena = arena_alloc();
+  r_ogl_state = push_array(arena, R_OGL_State, 1);
+  r_ogl_state->arena = arena;
+
+  // NOTE: load gl procedures
+#define X(name, r, p) name = (name##_Proc_Type *)r_ogl_load_proc(#name);
   R_OGL_PROC_XLIST;
 #undef X
 
-  Arena *arena = arena_alloc();
-  stt = push_array(arena, STT, 1);
-  stt->arena = arena;
-
-  String8 window_name = s("misery");
-  Vector2 window_size = vec2(800, 600);
-
-  stt->window = wm_window_open(window_name, window_size);
-  r_ogl_window_equip(stt->window);
-
-  /////////////////////////////////////////////////////////////////////////////
-
+  // NOTE: build shaders
   {
     struct {
       GLenum type;
@@ -115,7 +113,7 @@ entry_point(int argc, char **argv) {
 
     for_each_element(idx, stages) {
       stages[idx].out = glCreateShader(stages[idx].type);
-      GLint src_size = stages[idx].src->size;
+      GLint src_size = (GLint)stages[idx].src->size;
       glShaderSource(stages[idx].out, 1, (const GLchar **)&stages[idx].src->str, &src_size);
       glCompileShader(stages[idx].out);
       GLint info_log_length = 0;
@@ -132,16 +130,22 @@ entry_point(int argc, char **argv) {
       }
     }
 
-    stt->program = glCreateProgram();
+    r_ogl_state->program = glCreateProgram();
     for_each_element(idx, stages) {
-      glAttachShader(stt->program, stages[idx].out);
+      glAttachShader(r_ogl_state->program, stages[idx].out);
     }
 
-    glLinkProgram(stt->program);
-    glValidateProgram(stt->program);
-
-    glGenVertexArrays(1, &stt->all_purpose_vao);
+    glLinkProgram(r_ogl_state->program);
+    glValidateProgram(r_ogl_state->program);
   }
+
+  glGenVertexArrays(1, &r_ogl_state->all_purpose_vao);
+}
+
+internal void
+entry_point(int argc, char **argv) {
+  wm_init();
+  r_init();
 
   {
     float vertices[] = {
@@ -150,14 +154,22 @@ entry_point(int argc, char **argv) {
        0.0f, 0.5f, 0.0f,
     };
 
-    glGenBuffers(1, &stt->vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, stt->vbo);
+    glGenBuffers(1, &r_ogl_state->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, r_ogl_state->vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
 
-  /////////////////////////////////////////////////////////////////////////////
+  Arena *arena = arena_alloc();
+  m_state = push_array(arena, M_State, 1);
+  m_state->arena = arena;
 
-  wm_window_first_paint(stt->window);
+  String8 window_name = s("misery");
+  Vector2 window_size = vec2(800, 600);
+
+  m_state->window = wm_window_open(window_name, window_size);
+  r_ogl_window_equip(m_state->window);
+
+  wm_window_first_paint(m_state->window);
   for (;!frame(););
 }

@@ -1,9 +1,28 @@
 #ifndef R_OGL_CORE_H
 #define R_OGL_CORE_H
 
-// typedef char GLchar;
-// typedef ptrdiff_t GLsizeiptr;
-// typedef ptrdiff_t GLintptr;
+////////////////////////////////
+// NOTE: Defines
+
+typedef char GLchar;
+typedef ptrdiff_t GLsizeiptr;
+typedef ptrdiff_t GLintptr;
+
+#define GL_ARRAY_BUFFER                   0x8892
+#define GL_STREAM_DRAW                    0x88E0
+#define GL_STREAM_READ                    0x88E1
+#define GL_STREAM_COPY                    0x88E2
+#define GL_STATIC_DRAW                    0x88E4
+#define GL_STATIC_READ                    0x88E5
+#define GL_STATIC_COPY                    0x88E6
+#define GL_DYNAMIC_DRAW                   0x88E8
+#define GL_DYNAMIC_READ                   0x88E9
+#define GL_DYNAMIC_COPY                   0x88EA
+
+#define GL_FRAGMENT_SHADER                0x8B30
+#define GL_VERTEX_SHADER                  0x8B31
+#define GL_COMPILE_STATUS                 0x8B81
+#define GL_INFO_LOG_LENGTH                0x8B84
 
 ////////////////////////////////
 // NOTE: OpenGL Proc List
@@ -28,10 +47,10 @@
   X(glVertexAttribPointer, void, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid *pointer))\
   X(glEnableVertexAttribArray, void, (GLuint index))
 
-#define X(name, r, p) typedef r name##_Proc p;
+#define X(name, r, p) typedef r name##_Proc_Type p;
 R_OGL_PROC_XLIST;
 #undef X
-#define X(name, r, p) global name##_Proc *name = 0;
+#define X(name, r, p) global name##_Proc_Type *name = 0;
 R_OGL_PROC_XLIST;
 #undef X
 

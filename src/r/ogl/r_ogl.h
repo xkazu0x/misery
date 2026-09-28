@@ -2,7 +2,7 @@
 #define R_OGL_H
 
 #if OS_WINDOWS
-// TODO: w32/r/ogl/w32_r_ogl32.h
+# include "w32/r/ogl/w32_r_ogl.h"
 #elif OS_LINUX
 # include "lnx/r/ogl/lnx_r_ogl.h"
 #else
