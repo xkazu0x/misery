@@ -45,7 +45,12 @@ typedef ptrdiff_t GLintptr;
   X(glBindBuffer, void, (GLenum target, GLuint buffer))\
   X(glBufferData, void, (GLenum target, GLsizeiptr size, const GLvoid *data, GLenum usage))\
   X(glVertexAttribPointer, void, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid *pointer))\
-  X(glEnableVertexAttribArray, void, (GLuint index))
+  X(glEnableVertexAttribArray, void, (GLuint index))\
+  X(glGetUniformLocation, GLint, (GLuint program, const GLchar *name))\
+  X(glUniform2f, void, (GLint location, GLfloat v0, GLfloat v1))\
+  X(glBufferSubData, void, (GLenum target, ptrdiff_t offset, ptrdiff_t size, const void *data))\
+  X(glDrawArraysInstanced, void, (GLenum mode, GLint first, GLsizei count, GLsizei primcount))\
+  X(glVertexAttribDivisor, void, (GLuint index, GLuint divisor))
 
 #define X(name, r, p) typedef r name##_Proc_Type p;
 R_OGL_PROC_XLIST;
