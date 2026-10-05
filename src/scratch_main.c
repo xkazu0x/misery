@@ -96,8 +96,8 @@ frame(void) {
   f32 wnd_w = window_size.x;
   f32 wnd_h = window_size.y;
 
-  f32 src_w = canvas->width;
-  f32 src_h = canvas->height;
+  f32 src_w = (f32)canvas->width;
+  f32 src_h = (f32)canvas->height;
   f32 src_x = 0.0f;
   f32 src_y = 0.0f;
 
@@ -114,7 +114,6 @@ frame(void) {
     dst_x, dst_y, dst_x+dst_w, dst_y+dst_h,
     src_x, src_y, src_w, src_h,
   };
-  assert_always(sizeof(vertices) <= KB(64));
 
   r_ogl_window_select(m_state->window);
 

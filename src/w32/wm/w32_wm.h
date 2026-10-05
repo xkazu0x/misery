@@ -47,14 +47,14 @@ global Arena *w32_wm_event_arena = 0;
 // NOTE: Helpers
 
 internal Range2         w32_wm_range2_from_rect(RECT rect);
-internal WM_Window      w32_wm_handle_from_window(W32_WM_Window *window);
+internal WM_Window      w32_wm_handle_from_window(W32_WM_Window *w);
 internal W32_WM_Window *w32_wm_window_from_handle(WM_Window handle);
 internal W32_WM_Window *w32_wm_window_from_hwnd(HWND hwnd);
 internal W32_WM_Window *w32_wm_window_alloc(void);
-internal void           w32_wm_window_release(W32_WM_Window *window);
+internal void           w32_wm_window_release(W32_WM_Window *w);
 internal WM_Key         w32_wm_key_from_vkey(WPARAM vkey);
 internal WM_Key         w32_wm_vkey_from_key(WM_Key key);
-internal WM_Event      *w32_wm_push_event(WM_Event_Type type, W32_WM_Window *window);
+internal WM_Event      *w32_wm_push_event(WM_Event_Type type, W32_WM_Window *w);
 internal LRESULT        w32_wm_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 #endif // W32_WM_H

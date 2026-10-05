@@ -12,9 +12,9 @@ w32_wm_range2_from_rect(RECT rect) {
 }
 
 internal WM_Window
-w32_wm_handle_from_window(W32_WM_Window *window) {
+w32_wm_handle_from_window(W32_WM_Window *w) {
   WM_Window result = {0};
-  result.v[0] = (u64)window;
+  result.v[0] = (u64)w;
   return(result);
 }
 
@@ -38,22 +38,22 @@ w32_wm_window_from_hwnd(HWND hwnd) {
 
 internal W32_WM_Window *
 w32_wm_window_alloc(void) {
-  W32_WM_Window *window = w32_wm_state->free_window;
-  if (window != 0) {
+  W32_WM_Window *result = w32_wm_state->free_window;
+  if (result != 0) {
     sll_stack_pop(w32_wm_state->free_window);
   } else {
-    window = push_array_no_zero(w32_wm_state->arena, W32_WM_Window, 1);
+    result = push_array_no_zero(w32_wm_state->arena, W32_WM_Window, 1);
   }
-  memory_zero_struct(window);
-  dll_push_back(w32_wm_state->first_window, w32_wm_state->last_window, window);
-  window->last_placement.length = sizeof(WINDOWPLACEMENT);
-  return(window);
+  memory_zero_struct(result);
+  dll_push_back(w32_wm_state->first_window, w32_wm_state->last_window, result);
+  result->last_placement.length = sizeof(WINDOWPLACEMENT);
+  return(result);
 }
 
 internal void
-w32_wm_window_release(W32_WM_Window *window) {
-  dll_remove(w32_wm_state->first_window, w32_wm_state->last_window, window);
-  sll_stack_push(w32_wm_state->free_window, window);
+w32_wm_window_release(W32_WM_Window *w) {
+  dll_remove(w32_wm_state->first_window, w32_wm_state->last_window, w);
+  sll_stack_push(w32_wm_state->free_window, w);
 }
 
 internal WM_Key
@@ -271,9 +271,9 @@ w32_wm_vkey_from_key(WM_Key key) {
 }
 
 internal WM_Event *
-w32_wm_push_event(WM_Event_Type type, W32_WM_Window *window) {
+w32_wm_push_event(WM_Event_Type type, W32_WM_Window *w) {
   WM_Event *event = wm_event_list_push(w32_wm_event_arena, &w32_wm_event_list, type);
-  event->window = w32_wm_handle_from_window(window);
+  event->window = w32_wm_handle_from_window(w);
   event->modifiers = wm_get_modifiers();
   return(event);
 }
@@ -626,52 +626,63 @@ wm_window_open(String8 name, Vector2 size) {
 }
 
 internal void
-wm_window_close(WM_Window handle) {
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
-    ReleaseDC(window->hwnd, window->hdc);
-    DestroyWindow(window->hwnd);
-    w32_wm_window_release(window);
+wm_window_close(WM_Window window) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
+    ReleaseDC(w->hwnd, w->hdc);
+    DestroyWindow(w->hwnd);
+    w32_wm_window_release(w);
   }
 }
 
 internal void
-wm_window_first_paint(WM_Window handle) {
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
-    window->first_paint_done = 1;
-    ShowWindow(window->hwnd, SW_SHOW);
-    if (window->maximized) {
-      ShowWindow(window->hwnd, SW_MAXIMIZE);
+wm_window_first_paint(WM_Window window) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
+    w->first_paint_done = 1;
+    ShowWindow(w->hwnd, SW_SHOW);
+    if (w->maximized) {
+      ShowWindow(w->hwnd, SW_MAXIMIZE);
     }
   }
 }
 
+internal void
+wm_window_set_name(WM_Window window, String8 name) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
+    Temp scratch = scratch_begin(0, 0);
+    String16 name16 = str16_from_8(scratch.arena, name);
+    SetWindowTextW(w->hwnd, (WCHAR *)name16.str);
+    scratch_end(scratch);
+  }
+}
+
 internal b32
-wm_window_is_fullscreen(WM_Window handle) {
+wm_window_is_fullscreen(WM_Window window) {
   b32 result = 0;
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
-    DWORD window_style = GetWindowLong(window->hwnd, GWL_STYLE);
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
+    DWORD window_style = GetWindowLong(w->hwnd, GWL_STYLE);
     result = !(window_style & WS_OVERLAPPEDWINDOW);
   }
   return(result);
 }
 
 internal void
-wm_window_set_fullscreen(WM_Window handle, b32 fullscreen) {
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
-    DWORD window_style = GetWindowLong(window->hwnd, GWL_STYLE);
-    b32 is_fullscreen_already = wm_window_is_fullscreen(handle);
+wm_window_set_fullscreen(WM_Window window, b32 fullscreen) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
+    DWORD window_style = GetWindowLong(w->hwnd, GWL_STYLE);
+    b32 is_fullscreen_already = wm_window_is_fullscreen(window);
     if (fullscreen) {
       if (!is_fullscreen_already) {
-        GetWindowPlacement(window->hwnd, &window->last_placement);
+        GetWindowPlacement(w->hwnd, &w->last_placement);
       }
       MONITORINFO monitor_info = {sizeof(monitor_info)};
-      if(GetMonitorInfo(MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTOPRIMARY), &monitor_info)) {
-        SetWindowLong(window->hwnd, GWL_STYLE, window_style & ~WS_OVERLAPPEDWINDOW);
-        SetWindowPos(window->hwnd, HWND_TOP,
+      if(GetMonitorInfo(MonitorFromWindow(w->hwnd, MONITOR_DEFAULTTOPRIMARY), &monitor_info)) {
+        SetWindowLong(w->hwnd, GWL_STYLE, window_style & ~WS_OVERLAPPEDWINDOW);
+        SetWindowPos(w->hwnd, HWND_TOP,
                      monitor_info.rcMonitor.left,
                      monitor_info.rcMonitor.top,
                      monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
@@ -679,9 +690,9 @@ wm_window_set_fullscreen(WM_Window handle, b32 fullscreen) {
                      SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
       }
     } else {
-      SetWindowLong(window->hwnd, GWL_STYLE, window_style | WS_OVERLAPPEDWINDOW);
-      SetWindowPlacement(window->hwnd, &window->last_placement);
-      SetWindowPos(window->hwnd, 0, 0, 0, 0, 0,
+      SetWindowLong(w->hwnd, GWL_STYLE, window_style | WS_OVERLAPPEDWINDOW);
+      SetWindowPlacement(w->hwnd, &w->last_placement);
+      SetWindowPos(w->hwnd, 0, 0, 0, 0, 0,
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
                    SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
     }
@@ -689,83 +700,72 @@ wm_window_set_fullscreen(WM_Window handle, b32 fullscreen) {
 }
 
 internal b32
-wm_window_is_maximized(WM_Window handle) {
+wm_window_is_maximized(WM_Window window) {
   b32 result = 0;
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
-    result = !!(IsZoomed(window->hwnd));
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
+    result = !!(IsZoomed(w->hwnd));
   }
   return(result);
 }
 
 internal void
-wm_window_set_maximized(WM_Window handle, b32 maximized) {
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
-    if (window->first_paint_done) {
+wm_window_set_maximized(WM_Window window, b32 maximized) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
+    if (w->first_paint_done) {
       switch (maximized) {
         default:
-        case 0: {ShowWindow(window->hwnd, SW_RESTORE);} break;
-        case 1: {ShowWindow(window->hwnd, SW_MAXIMIZE);} break;
+        case 0: {ShowWindow(w->hwnd, SW_RESTORE);} break;
+        case 1: {ShowWindow(w->hwnd, SW_MAXIMIZE);} break;
       }
     } else {
-      window->maximized = maximized;
+      w->maximized = maximized;
     }
   }
 }
 
 internal b32
-wm_window_is_minimized(WM_Window handle) {
+wm_window_is_minimized(WM_Window window) {
   b32 result = 0;
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
-    result = !!(IsIconic(window->hwnd));
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
+    result = !!(IsIconic(w->hwnd));
   }
   return(result);
 }
 
 internal void
-wm_window_set_minimized(WM_Window handle, b32 minimized) {
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0 && minimized != wm_window_is_minimized(handle)) {
+wm_window_set_minimized(WM_Window window, b32 minimized) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0 && minimized != wm_window_is_minimized(window)) {
     switch(minimized) {
       default:
-      case 0: {ShowWindow(window->hwnd, SW_RESTORE);} break;
-      case 1: {ShowWindow(window->hwnd, SW_MINIMIZE);} break;
+      case 0: {ShowWindow(w->hwnd, SW_RESTORE);} break;
+      case 1: {ShowWindow(w->hwnd, SW_MINIMIZE);} break;
     }
   }
 }
 
-internal void
-wm_window_set_name(WM_Window handle, String8 name) {
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
-    Temp scratch = scratch_begin(0, 0);
-    String16 name16 = str16_from_8(scratch.arena, name);
-    SetWindowTextW(window->hwnd, (WCHAR *)name16.str);
-    scratch_end(scratch);
-  }
-}
-
 internal Range2
-wm_window_get_rect(WM_Window handle) {
+wm_window_get_rect(WM_Window window) {
   Range2 result = {0};
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
     RECT rect = {0};
-    GetWindowRect(window->hwnd, &rect);
+    GetWindowRect(w->hwnd, &rect);
     result = w32_wm_range2_from_rect(rect);
   }
   return(result);
 }
 
 internal Range2
-wm_window_get_client_rect(WM_Window handle) {
+wm_window_get_client_rect(WM_Window window) {
   Range2 result = {0};
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
     RECT rect = {0};
-    GetClientRect(window->hwnd, &rect);
+    GetClientRect(w->hwnd, &rect);
     result = w32_wm_range2_from_rect(rect);
   }
   return(result);
@@ -812,13 +812,13 @@ wm_key_is_down(WM_Key key) {
 }
 
 internal Vector2
-wm_mouse_from_window(WM_Window handle) {
+wm_mouse_from_window(WM_Window window) {
   Vector2 result = {0};
-  W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  if (window != 0) {
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
+  if (w != 0) {
     POINT p;
     GetCursorPos(&p);
-    ScreenToClient(window->hwnd, &p);
+    ScreenToClient(w->hwnd, &p);
     result.x = (f32)p.x;
     result.y = (f32)p.y;
   }
