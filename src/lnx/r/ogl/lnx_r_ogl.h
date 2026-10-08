@@ -1,8 +1,10 @@
 #ifndef R_OGL_LNX_H
 #define R_OGL_LNX_H
 
+#define glActiveTexture glActiveTexture__static
 #include <GL/gl.h>
 #include <GL/glx.h>
+#undef glActiveTexture
 
 #define GLX_CONTEXT_MAJOR_VERSION_ARB          0x2091
 #define GLX_CONTEXT_MINOR_VERSION_ARB          0x2092
