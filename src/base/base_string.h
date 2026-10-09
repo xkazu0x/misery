@@ -149,16 +149,14 @@ internal String8 forwardslashed_from_str8(Arena *arena, String8 s);
 internal b32 str8_match(String8 a, String8 b, String_Match_Flags flags);
 internal b32 str8_char_match(u8 a, u8 b, String_Match_Flags flags);
 internal u64 str8_find_needle(String8 s, String8 needle, String_Match_Flags flags);
-
-#define str8_match_lit(a_lit, b)   str8_match(str8_lit(a_lit), (b))
-#define str8_match_cstr(a_cstr, b) str8_match(str8_cstr(a_cstr), (b))
-#define str8_matchi(a, b) str8_match(a, b, String_Match_Flag_CASE_INSENSITIVE)
+#define str8_match_lit(a_lit, b)    str8_match(str8_lit(a_lit), (b))
+#define str8_match_cstr(a_cstr, b)  str8_match(str8_cstr(a_cstr), (b))
+#define str8_matchi(a, b)           str8_match(a, b, String_Match_Flag_CASE_INSENSITIVE)
 #define str8_starts_with(s, start)  str8_match(str8_prefix((s), (start).size), (start), 0)
 #define str8_starts_withi(s, start) str8_match(str8_prefix((s), (start).size), (start), String_Match_Flag_CASE_INSENSITIVE)
-#define str8_ends_with(s, end)  str8_match(str8_postfix((s), (end).size), (end), 0)
-#define str8_ends_withi(s, end) str8_match(str8_postfix((s), (end).size), (end), String_Match_Flag_CASE_INSENSITIVE)
-#define str8_char_matchi(a, b) str8_char_match(a, b, String_Match_Flag_CASE_INSENSITIVE)
-
+#define str8_ends_with(s, end)      str8_match(str8_postfix((s), (end).size), (end), 0)
+#define str8_ends_withi(s, end)     str8_match(str8_postfix((s), (end).size), (end), String_Match_Flag_CASE_INSENSITIVE)
+#define str8_char_matchi(a, b)      str8_char_match(a, b, String_Match_Flag_CASE_INSENSITIVE)
 
 ////////////////////////////////
 // NOTE: String Slicing

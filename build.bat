@@ -44,9 +44,6 @@ if "%clang%"=="1" set rc=call llvm-rc
 if "%msvc%"=="1"  set link_dll=/link /DLL
 if "%clang%"=="1" set link_dll=-Xlinker -DLL
 
-:: --- External Libraries --------------------------------------
-set link_freetype=-I..\src\third_party\freetype-2.14.3\include freetype.lib
-
 :: --- Choose Compile/Link -------------------------------------
 if "%msvc%"=="1"    set cc_debug=%cl_debug%
 if "%msvc%"=="1"    set cc_release=%cl_release%
@@ -71,12 +68,8 @@ REM pushd build
 REM %rc% /nologo /fo logo.res ..\data\logo.rc || exit /b 1
 REM popd
 
-:: --- Build FreeType ---------------------------------------------------------
-REM if not exist build\freetype.lib set freetype=1
-REM if "%freetype%"=="1" call build_freetype.bat || exit /b 1
-
 :: --- Build ------------------------------------------------------------------
 pushd build
-%compile% ..\src\scratch_main.c %cc_link% %out%scratch.exe || exit /b 1
-if "%run%"=="1" call scratch.exe
+%compile% ..\src\misery_main.c %cc_link% %out%misery.exe || exit /b 1
+if "%run%"=="1" call misery.exe
 popd

@@ -82,7 +82,6 @@ internal f32 lerpc_f32(f32 a, f32 b, f32 t);
 // NOTE: Vectors
 
 // NOTE: vector2
-#define vec2(x,y) vector2_make((x),(y))
 internal Vector2 vector2_zero(void);
 internal Vector2 vector2_fill(f32 n);
 internal Vector2 vector2_make(f32 x, f32 y);
@@ -106,7 +105,6 @@ internal f32 vector2_norm2(Vector2 v);
 internal f32 vector2_norm(Vector2 v);
 
 // NOTE: vector3
-#define vec3(x,y,z) vector3_make((x),(y),(z))
 internal Vector3 vector3_zero(void);
 internal Vector3 vector3_fill(f32 n);
 internal Vector3 vector3_make(f32 x, f32 y, f32 z);
@@ -131,7 +129,6 @@ internal f32 vector3_norm2(Vector3 v);
 internal f32 vector3_norm(Vector3 v);
 
 // NOTE: vector4
-#define vec4(x,y,z,w) vector3_make((x),(y),(z),(w))
 internal Vector4 vector4_zero(void);
 internal Vector4 vector4_fill(f32 n);
 internal Vector4 vector4_make(f32 x, f32 y, f32 z, f32 w);
@@ -152,6 +149,11 @@ internal Vector4 vector4_lerpc(Vector4 a, Vector4 b, f32 t);
 internal f32 vector4_dot(Vector4 a, Vector4 b);
 internal f32 vector4_norm2(Vector4 v);
 internal f32 vector4_norm(Vector4 v);
+
+// NOTE: helpers
+#define v2(x,y)     vector2_make((x),(y))
+#define v3(x,y,z)   vector3_make((x),(y),(z))
+#define v4(x,y,z,w) vector4_make((x),(y),(z),(w))
 
 ////////////////////////////////
 // NOTE: Matrices

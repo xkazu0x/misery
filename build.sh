@@ -12,7 +12,7 @@ cc_release="-g -O2 -DBUILD_DEBUG=0 ${cc_common}"
 cc_link="-lm"
 
 # --- External Libraries ------------------------------------------------------
-# pkg-config libx11 libxcursor libGL
+# dependencies: pkg-config libx11 libxcursor libGL
 if [[ -x "$(command -v pkg-config)" ]]; then
   cc_os_gfx="$(pkg-config --cflags --libs x11 xcursor)"
   cc_render="$(pkg-config --cflags --libs gl)"
@@ -34,6 +34,6 @@ mkdir -p build
 
 # --- Build -------------------------------------------------------------------
 cd build
-$compile ../src/scratch_main.c $cc_link $cc_os_gfx $cc_render -o scratch
-if [[ -v run ]]; then ./scratch; fi
+$compile ../src/misery_main.c $cc_link $cc_os_gfx $cc_render -o misery
+if [[ -v run ]]; then ./misery; fi
 cd ..
