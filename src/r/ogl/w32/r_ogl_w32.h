@@ -1,5 +1,5 @@
-#ifndef W32_R_OGL_H
-#define W32_R_OGL_H
+#ifndef R_OGL_W32_H
+#define R_OGL_W32_H
 
 #include <GL/gl.h>
 #pragma comment(lib, "opengl32")
@@ -31,6 +31,6 @@ FNWGLCHOOSEPIXELFORMATARBPROC *wglChoosePixelFormatARB;
 FNWGLCREATECONTEXTATTRIBSARBPROC *wglCreateContextAttribsARB;
 FNWGLSWAPINTERVALEXTPROC *wglSwapIntervalEXT;
 
-global HGLRC r_ogl_w32_hglrc = 0;
+global HGLRC r_ogl_w32_ctx = 0;
 
-#endif // W32_R_OGL_H
+#endif // R_OGL_W32_H

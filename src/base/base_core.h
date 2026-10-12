@@ -79,6 +79,7 @@
 #define clamp_top(a,x) min(a, x);
 #define clamp_bot(x,b) max(x, b);
 #define clamp(x,a,b) (((x)<(a))?(a):((x)>(b))?(b):(x))
+#define clamp_zo(x) clamp((x),0,1)
 
 ////////////////////////////////
 // NOTE: Type -> Alignment
@@ -272,9 +273,11 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 #define glue(a, b) glue_(a, b)
 
 #define array_count(a) (sizeof(a)/sizeof(*(a)))
+#define round_t(T,x) ((T)(x + 0.5f))
 #define swap_t(T,a,b) do{T __t = (a); (a) = (b); (b) = __t;}while(0)
 #define sign_t(T,x) ((T)((x) > 0) - (T)((x) < 0))
 #define abs_t(T,x) (sign_t(T,x)*(x))
+#define pow2(x) ((x)*(x))
 
 #if ARCH_64BIT
 #define int_from_ptr(ptr) ((u64)(ptr))
@@ -315,90 +318,32 @@ typedef float    f32;
 typedef void void_proc(void);
 
 ////////////////////////////////
-// NOTE: Toolchain/Environment Enums
-
-typedef enum Operating_System {
-  Operating_System_NULL,
-  Operating_System_WINDOWS,
-  Operating_System_LINUX,
-  Operating_System_MAC,
-  Operating_System_COUNT,
-} Operating_System;
-#if OS_WINDOWS
-# define Operating_System_CURRENT Operating_System_WINDOWS
-#elif OS_LINUX
-# define Operating_System_CURRENT Operating_System_LINUX
-#elif OS_MAC
-# define Operating_System_CURRENT Operating_System_MAC
-#else
-# define Operating_System_CURRENT Operating_System_NULL
-#endif
-
-typedef enum Arch {
-  Arch_NULL,
-  Arch_X64,
-  Arch_X86,
-  Arch_ARM64,
-  Arch_ARM32,
-  Arch_COUNT,
-} Arch;
-#if ARCH_X64
-# define Arch_CURRENT Arch_X64
-#elif ARCH_X86
-# define Arch_CURRENT Arch_X86
-#elif ARCH_ARM64
-# define Arch_CURRENT Arch_ARM64
-#elif ARCH_ARM32
-# define Arch_CURRENT Arch_ARM32
-#else
-# define Arch_CURRENT Arch_NULL
-#endif
-
-typedef enum Compiler {
-  Compiler_NULL,
-  Compiler_MSVC,
-  Compiler_GCC,
-  Compiler_CLANG,
-  Compiler_COUNT,
-} Compiler;
-#if CC_MSVC
-# define Compiler_CURRENT Compiler_MSVC
-#elif CC_GCC
-# define Compiler_CURRENT Compiler_GCC
-#elif CC_CLANG
-# define Compiler_CURRENT Compiler_CLANG
-#else
-# define Compiler_CURRENT Compiler_NULL
-#endif
-
-////////////////////////////////
 // NOTE: Basic Constants
 
 global u32 sign32     = 0x80000000;
 global u32 exponent32 = 0x7F800000;
 global u32 mantissa32 = 0x007FFFFF;
 
-global f32   big_golden32 = 1.61803398875f;
-global f32 small_golden32 = 0.61803398875f;
+global f32 pi32  = 3.141592653589793f;
+global f64 pi64  = 3.141592653589793;
 
-global f32 pi32 = 3.1415926535897f;
+global f32 tau32 = 6.283185307179586f;
+global f64 tau64 = 6.283185307179586;
 
-global f64 machine_epsilon64 = 4.94065645841247e-324;
-
-global u64 max_u64 = 0xffffffffffffffffull;
-global u32 max_u32 = 0xffffffff;
-global u16 max_u16 = 0xffff;
 global u8  max_u8  = 0xff;
+global u16 max_u16 = 0xffff;
+global u32 max_u32 = 0xffffffff;
+global u64 max_u64 = 0xffffffffffffffffull;
 
-global s64 max_s64 = (s64)0x7fffffffffffffffll;
-global s32 max_s32 = (s32)0x7fffffff;
+global s8  max_s8  = (s8)0x7f;
 global s16 max_s16 = (s16)0x7fff;
-global s8  max_s8  =  (s8)0x7f;
+global s32 max_s32 = (s32)0x7fffffff;
+global s64 max_s64 = (s64)0x7fffffffffffffffll;
 
-global s64 min_s64 = (s64)0x8000000000000000ll;
-global s32 min_s32 = (s32)0x80000000;
+global s8  min_s8  = (s8)0x80;
 global s16 min_s16 = (s16)0x8000;
-global s8  min_s8  =  (s8)0x80;
+global s32 min_s32 = (s32)0x80000000;
+global s64 min_s64 = (s64)0x8000000000000000ll;
 
 global const u32 bitmask1  = 0x00000001u;
 global const u32 bitmask2  = 0x00000003u;
@@ -533,6 +478,63 @@ global const u64 bit63 = (1ull<<62);
 global const u64 bit64 = (1ull<<63);
 
 ////////////////////////////////
+// NOTE: Toolchain/Environment Enums
+
+typedef enum Operating_System {
+  Operating_System_NULL,
+  Operating_System_WINDOWS,
+  Operating_System_LINUX,
+  Operating_System_MAC,
+  Operating_System_COUNT,
+} Operating_System;
+#if OS_WINDOWS
+# define Operating_System_CURRENT Operating_System_WINDOWS
+#elif OS_LINUX
+# define Operating_System_CURRENT Operating_System_LINUX
+#elif OS_MAC
+# define Operating_System_CURRENT Operating_System_MAC
+#else
+# define Operating_System_CURRENT Operating_System_NULL
+#endif
+
+typedef enum Arch {
+  Arch_NULL,
+  Arch_X64,
+  Arch_X86,
+  Arch_ARM64,
+  Arch_ARM32,
+  Arch_COUNT,
+} Arch;
+#if ARCH_X64
+# define Arch_CURRENT Arch_X64
+#elif ARCH_X86
+# define Arch_CURRENT Arch_X86
+#elif ARCH_ARM64
+# define Arch_CURRENT Arch_ARM64
+#elif ARCH_ARM32
+# define Arch_CURRENT Arch_ARM32
+#else
+# define Arch_CURRENT Arch_NULL
+#endif
+
+typedef enum Compiler {
+  Compiler_NULL,
+  Compiler_MSVC,
+  Compiler_GCC,
+  Compiler_CLANG,
+  Compiler_COUNT,
+} Compiler;
+#if CC_MSVC
+# define Compiler_CURRENT Compiler_MSVC
+#elif CC_GCC
+# define Compiler_CURRENT Compiler_GCC
+#elif CC_CLANG
+# define Compiler_CURRENT Compiler_CLANG
+#else
+# define Compiler_CURRENT Compiler_NULL
+#endif
+
+////////////////////////////////
 // NOTE: Time Types
 
 typedef struct Date_Time Date_Time;
@@ -544,7 +546,7 @@ struct Date_Time {
   u16 hour;  // [0,24]
   u16 day;
   u32 mon;
-  u32 year;  // 1 = 1 CE, 0 = 1 BC
+  u32 year;  // 1=1 CE, 0=1 BC
 };
 
 typedef u64 Dense_Time;

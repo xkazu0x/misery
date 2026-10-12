@@ -1,7 +1,7 @@
 #if OS_WINDOWS
-# include "w32/r/ogl/w32_r_ogl.c"
+# include "r/ogl/w32/r_ogl_w32.c"
 #elif OS_LINUX
-# include "lnx/r/ogl/lnx_r_ogl.c"
+# include "r/ogl/lnx/r_ogl_lnx.c"
 #else
 # error OpenGL rendering backend not implemented for this operating system.
 #endif

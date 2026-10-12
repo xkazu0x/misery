@@ -2,9 +2,9 @@
 #define R_OGL_H
 
 #if OS_WINDOWS
-# include "w32/r/ogl/w32_r_ogl.h"
+# include "r/ogl/w32/r_ogl_w32.h"
 #elif OS_LINUX
-# include "lnx/r/ogl/lnx_r_ogl.h"
+# include "r/ogl/lnx/r_ogl_lnx.h"
 #else
 # error OpenGL rendering backend not implemented for this operating system.
 #endif

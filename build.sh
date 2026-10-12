@@ -34,6 +34,13 @@ mkdir -p build
 
 # --- Build -------------------------------------------------------------------
 cd build
-$compile ../src/misery_main.c $cc_link $cc_os_gfx $cc_render -o misery
-if [[ -v run ]]; then ./misery; fi
+$compile ../src/scratch_main.c $cc_link $cc_os_gfx $cc_render -o scratch
+if [[ -v run ]]; then ./scratch; fi
+
+# $compile ../src/misery_main.c $cc_link $cc_os_gfx $cc_render -o misery
+# if [[ -v run ]]; then ./misery; fi
+
+# $compile ../src/raycaster_main.c $cc_link $cc_os_gfx $cc_render -o raycaster
+# if [[ -v run ]]; then ./raycaster; fi
+
 cd ..

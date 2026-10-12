@@ -4,11 +4,14 @@
 ////////////////////////////////
 // NOTE: Includes/Libraries
 
+#undef internal
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/XKBlib.h>
 #include <X11/Xcursor/Xcursor.h>
 #include <poll.h>
 #include <sys/eventfd.h>
+#define internal static
 
 ////////////////////////////////
 // NOTE: Windows

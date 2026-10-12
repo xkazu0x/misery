@@ -96,11 +96,11 @@ R_OGL_PROC_XLIST;
 ////////////////////////////////
 // NOTE: @per_os_impl Hooks
 
-internal void_proc *r_ogl_load_proc(char *name);
-internal void r_ogl_init(void);
-internal void r_ogl_window_equip(WM_Window window);
-internal void r_ogl_window_unequip(WM_Window window);
-internal void r_ogl_window_select(WM_Window window);
-internal void r_ogl_window_swap(WM_Window window);
+internal void_proc *r_ogl_os_load_proc(char *name);
+internal void r_ogl_os_init(void);
+internal void r_ogl_os_window_equip(WM_Window window);
+internal void r_ogl_os_window_unequip(WM_Window window);
+internal void r_ogl_os_window_select(WM_Window window);
+internal void r_ogl_os_window_swap(WM_Window window);
 
 #endif // R_OGL_CORE_H

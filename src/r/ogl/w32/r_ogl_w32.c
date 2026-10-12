@@ -1,5 +1,5 @@
 internal void_proc *
-r_ogl_load_proc(char *name) {
+r_ogl_os_load_proc(char *name) {
   void_proc *ptr = (void_proc*)wglGetProcAddress(name);
   if (ptr == (void_proc*)1 || ptr == (void_proc*)2 || ptr == (void_proc*)3 || ptr == (void_proc*)-1) {
     ptr = 0;
@@ -8,7 +8,7 @@ r_ogl_load_proc(char *name) {
 }
 
 internal void
-r_ogl_init(void) {
+r_ogl_os_init(void) {
   WNDCLASSEXW wndclass = {sizeof(wndclass)};
   wndclass.lpfnWndProc = DefWindowProcW;
   wndclass.hInstance = GetModuleHandle(0);
@@ -37,9 +37,9 @@ r_ogl_init(void) {
   HGLRC ctx = wglCreateContext(hdc);
   wglMakeCurrent(hdc, ctx);
 
-  wglChoosePixelFormatARB    = (FNWGLCHOOSEPIXELFORMATARBPROC*)   r_ogl_load_proc("wglChoosePixelFormatARB");
-  wglCreateContextAttribsARB = (FNWGLCREATECONTEXTATTRIBSARBPROC*)r_ogl_load_proc("wglCreateContextAttribsARB");
-  wglSwapIntervalEXT         = (FNWGLSWAPINTERVALEXTPROC*)        r_ogl_load_proc("wglSwapIntervalEXT");
+  wglChoosePixelFormatARB    = (FNWGLCHOOSEPIXELFORMATARBPROC*)   r_ogl_os_load_proc("wglChoosePixelFormatARB");
+  wglCreateContextAttribsARB = (FNWGLCREATECONTEXTATTRIBSARBPROC*)r_ogl_os_load_proc("wglCreateContextAttribsARB");
+  wglSwapIntervalEXT         = (FNWGLSWAPINTERVALEXTPROC*)        r_ogl_os_load_proc("wglSwapIntervalEXT");
 
   int pf_attribs_i[] = {
     WGL_DRAW_TO_WINDOW_ARB, 1,
@@ -68,7 +68,7 @@ r_ogl_init(void) {
       0
     };
     real_ctx = wglCreateContextAttribsARB(hdc, ctx, ctx_attribs);
-    r_ogl_w32_hglrc = real_ctx;
+    r_ogl_w32_ctx = real_ctx;
   }
 
   wglMakeCurrent(hdc, 0);
@@ -78,9 +78,9 @@ r_ogl_init(void) {
 }
 
 internal void
-r_ogl_window_equip(WM_Window window) {
+r_ogl_os_window_equip(WM_Window window) {
   W32_WM_Window *w = w32_wm_window_from_handle(window);
-  wglMakeCurrent(w->hdc, r_ogl_w32_hglrc);
+  wglMakeCurrent(w->hdc, r_ogl_w32_ctx);
 
   int pixel_format = 0;
   UINT num_formats = 0;
@@ -118,15 +118,15 @@ r_ogl_os_window_unequip(WM_Window window) {
 }
 
 internal void
-r_ogl_window_select(WM_Window window) {
+r_ogl_os_window_select(WM_Window window) {
   W32_WM_Window *w = w32_wm_window_from_handle(window);
   if (w != 0) {
-    wglMakeCurrent(w->hdc, r_ogl_w32_hglrc);
+    wglMakeCurrent(w->hdc, r_ogl_w32_ctx);
   }
 }
 
 internal void
-r_ogl_window_swap(WM_Window window) {
+r_ogl_os_window_swap(WM_Window window) {
   W32_WM_Window *w = w32_wm_window_from_handle(window);
   if (w != 0) {
     SwapBuffers(w->hdc);

@@ -268,6 +268,12 @@ wm_init(void) {
   lnx_wm_state->arena = arena;
   lnx_wm_state->display = XOpenDisplay(0);
 
+  Bool supported = 0;
+  if (!XkbSetDetectableAutoRepeat(lnx_wm_state->display, True, &supported) || !supported) {
+    printf("[FATAL]: XkbSetDetectableAutoRepeat is not supported.");
+    abort_self(1);
+  }
+
   lnx_wm_state->wm_delete_window_atom = XInternAtom(lnx_wm_state->display, "WM_DELETE_WINDOW", 0);
   lnx_wm_state->xim = XOpenIM(lnx_wm_state->display, 0, 0, 0);
   lnx_wm_state->wakeup_fd = eventfd(0, EFD_CLOEXEC);
@@ -629,12 +635,12 @@ wm_get_events(Arena *arena, b32 wait) {
           if (event.xbutton.state & ControlMask) {modifiers |= WM_Modifier_CTRL;}
           if (event.xbutton.state & Mod1Mask)    {modifiers |= WM_Modifier_ALT;}
 
-          KeySym keysym = 0;
-          u8 text[256] = {0};
-          u64 text_size = Xutf8LookupString(w->xic, &event.xkey, (char *)text, sizeof(text), &keysym, 0);
-
           b32 is_right_sided = 0;
+          KeySym keysym = XLookupKeysym(&event.xkey, 0);
           WM_Key key = lnx_wm_key_from_keysym(keysym, &is_right_sided);
+
+          u8 text[256] = {0};
+          u64 text_size = Xutf8LookupString(w->xic, &event.xkey, (char *)text, sizeof(text), 0, 0);
 
           if (event.type == KeyPress && text_size != 0) {
             for (u64 off = 0; off < text_size;) {
@@ -651,7 +657,7 @@ wm_get_events(Arena *arena, b32 wait) {
             }
           }
 
-          WM_Event *e = wm_event_list_push(arena, &events, event.type == KeyPress ? WM_Event_Type_PRESS : WM_Event_Type_RELEASE);
+          WM_Event *e = wm_event_list_push(arena, &events, (event.type == KeyPress) ? WM_Event_Type_PRESS : WM_Event_Type_RELEASE);
           e->window = lnx_wm_handle_from_window(w);
           e->modifiers = modifiers;
           e->key = key;
@@ -699,10 +705,6 @@ wm_get_events(Arena *arena, b32 wait) {
           set_mouse_cursor = 1;
         } break;
 
-        // TODO: I think it's needed to set mouse cursor when exposing the window.
-        // Apparently, the cursor is cached when quitting the program.
-        // When launching it again, it uses the cached cursor for a single frame.
-
         case ClientMessage: {
           if ((Atom)event.xclient.data.l[0] == lnx_wm_state->wm_delete_window_atom) {
             LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xclient.window);
@@ -711,6 +713,7 @@ wm_get_events(Arena *arena, b32 wait) {
           }
         } break;
       }
+
       if (set_mouse_cursor) {
         Window root_window = 0;
         Window child_window = 0;

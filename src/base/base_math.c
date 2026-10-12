@@ -9,7 +9,7 @@ lerp_f32(f32 a, f32 b, f32 t) {
 
 internal f32
 lerpc_f32(f32 a, f32 b, f32 t) {
-  f32 result = lerp_f32(a, b, clamp(t, 0.0f, 1.0f));
+  f32 result = lerp_f32(a, b, clamp_zo(t));
   return(result);
 }
 
@@ -90,6 +90,24 @@ vector2_divs(Vector2 v, f32 s) {
   return(result);
 }
 
+internal f32
+vector2_dot(Vector2 a, Vector2 b) {
+  f32 result = a.x*b.x + a.y*b.y;
+  return(result);
+}
+
+internal f32
+vector2_norm2(Vector2 v) {
+  f32 result = vector2_dot(v, v);
+  return(result);
+}
+
+internal f32 
+vector2_norm(Vector2 v) {
+  f32 result = sqrt_f32(vector2_norm2(v));
+  return(result);
+}
+
 internal Vector2
 vector2_negate(Vector2 v) {
   Vector2 result = {-v.x, -v.y};
@@ -113,6 +131,22 @@ vector2_rotate(Vector2 v, f32 angle) {
 }
 
 internal Vector2
+vector2_clamp(Vector2 v, f32 a, f32 b) {
+  Vector2 result;
+  result.x = clamp(v.x, a, b);
+  result.y = clamp(v.y, a, b);
+  return(result);
+}
+
+internal Vector2
+vector2_clamp_zo(Vector2 v) {
+  Vector2 result;
+  result.x = clamp_zo(v.x);
+  result.y = clamp_zo(v.y);
+  return(result);
+}
+
+internal Vector2
 vector2_lerp(Vector2 a, Vector2 b, f32 t) {
   Vector2 v, s;
   s = vector2_fill(t);
@@ -124,31 +158,13 @@ vector2_lerp(Vector2 a, Vector2 b, f32 t) {
 
 internal Vector2
 vector2_lerpc(Vector2 a, Vector2 b, f32 t) {
-  Vector2 result = vector2_lerp(a, b, clamp(t, 0.0f, 1.0f));
-  return(result);
-}
-
-internal f32
-vector2_dot(Vector2 a, Vector2 b) {
-  f32 result = a.x*b.x + a.y*b.y;
+  Vector2 result = vector2_lerp(a, b, clamp_zo(t));
   return(result);
 }
 
 internal f32
 vector2_cross(Vector2 a, Vector2 b) {
   f32 result = a.x*b.y - a.y*b.x;
-  return(result);
-}
-
-internal f32
-vector2_norm2(Vector2 v) {
-  f32 result = vector2_dot(v, v);
-  return(result);
-}
-
-internal f32 
-vector2_norm(Vector2 v) {
-  f32 result = sqrt_f32(vector2_norm2(v));
   return(result);
 }
 
@@ -232,6 +248,24 @@ vector3_divs(Vector3 v, f32 s) {
   return(result);
 }
 
+internal f32
+vector3_dot(Vector3 a, Vector3 b) {
+  f32 result = a.x*b.x + a.y*b.y + a.z*b.z;
+  return(result);
+}
+
+internal f32
+vector3_norm2(Vector3 v) {
+  f32 result = vector3_dot(v, v);
+  return(result);
+}
+
+internal f32 
+vector3_norm(Vector3 v) {
+  f32 result = sqrt_f32(vector3_norm2(v));
+  return(result);
+}
+
 internal Vector3
 vector3_negate(Vector3 v) {
   Vector3 result = {-v.x, -v.y, -v.z};
@@ -241,6 +275,24 @@ vector3_negate(Vector3 v) {
 internal Vector3 
 vector3_normalize(Vector3 v) {
   Vector3 result = vector3_muls(v, (1.0f/vector3_norm(v)));
+  return(result);
+}
+
+internal Vector3
+vector3_clamp(Vector3 v, f32 a, f32 b) {
+  Vector3 result;
+  result.x = clamp(v.x, a, b);
+  result.y = clamp(v.y, a, b);
+  result.z = clamp(v.z, a, b);
+  return(result);
+}
+
+internal Vector3
+vector3_clamp_zo(Vector3 v) {
+  Vector3 result;
+  result.x = clamp_zo(v.x);
+  result.y = clamp_zo(v.y);
+  result.z = clamp_zo(v.z);
   return(result);
 }
 
@@ -269,24 +321,6 @@ vector3_cross(Vector3 a, Vector3 b) {
 internal Vector3
 vector3_crossn(Vector3 a, Vector3 b) {
   Vector3 result = vector3_normalize(vector3_cross(a, b));
-  return(result);
-}
-
-internal f32
-vector3_dot(Vector3 a, Vector3 b) {
-  f32 result = a.x*b.x + a.y*b.y + a.z*b.z;
-  return(result);
-}
-
-internal f32
-vector3_norm2(Vector3 v) {
-  f32 result = vector3_dot(v, v);
-  return(result);
-}
-
-internal f32 
-vector3_norm(Vector3 v) {
-  f32 result = sqrt_f32(vector3_norm2(v));
   return(result);
 }
 
@@ -370,6 +404,24 @@ vector4_divs(Vector4 v, f32 s) {
   return(result);
 }
 
+internal f32
+vector4_dot(Vector4 a, Vector4 b) {
+  f32 result = a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
+  return(result);
+}
+
+internal f32
+vector4_norm2(Vector4 v) {
+  f32 result = vector4_dot(v, v);
+  return(result);
+}
+
+internal f32 
+vector4_norm(Vector4 v) {
+  f32 result = sqrt_f32(vector4_norm2(v));
+  return(result);
+}
+
 internal Vector4
 vector4_negate(Vector4 v) {
   Vector4 result = {-v.x, -v.y, -v.z, -v.w};
@@ -379,6 +431,26 @@ vector4_negate(Vector4 v) {
 internal Vector4 
 vector4_normalize(Vector4 v) {
   Vector4 result = vector4_muls(v, (1.0f/vector4_norm(v)));
+  return(result);
+}
+
+internal Vector4
+vector4_clamp(Vector4 v, f32 a, f32 b) {
+  Vector4 result;
+  result.x = clamp(v.x, a, b);
+  result.y = clamp(v.y, a, b);
+  result.z = clamp(v.z, a, b);
+  result.w = clamp(v.w, a, b);
+  return(result);
+}
+
+internal Vector4
+vector4_clamp_zo(Vector4 v) {
+  Vector4 result;
+  result.x = clamp_zo(v.x);
+  result.y = clamp_zo(v.y);
+  result.z = clamp_zo(v.z);
+  result.w = clamp_zo(v.w);
   return(result);
 }
 
@@ -395,24 +467,6 @@ vector4_lerp(Vector4 a, Vector4 b, f32 t) {
 internal Vector4
 vector4_lerpc(Vector4 a, Vector4 b, f32 t) {
   Vector4 result = vector4_lerp(a, b, clamp(t, 0.0f, 1.0f));
-  return(result);
-}
-
-internal f32
-vector4_dot(Vector4 a, Vector4 b) {
-  f32 result = a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
-  return(result);
-}
-
-internal f32
-vector4_norm2(Vector4 v) {
-  f32 result = vector4_dot(v, v);
-  return(result);
-}
-
-internal f32 
-vector4_norm(Vector4 v) {
-  f32 result = sqrt_f32(vector4_norm2(v));
   return(result);
 }
 
@@ -512,7 +566,7 @@ matrix4x4_ortho_rh_no(f32 left, f32 right, f32 bottom, f32 top, f32 near_z, f32 
   // | 2*rl     0     0 -(r+l)*rl |
   // |    0  2*tb     0 -(t+b)*tb |
   // |    0     0  2*fn  (f+n)*fn |
-  // |    0     0     0         0 |
+  // |    0     0     0         1 |
   Matrix4x4 result = matrix4x4_identity();
   f32 rl = 1.0f/(right - left);
   f32 tb = 1.0f/(top - bottom);
@@ -640,5 +694,38 @@ range2_dim(Range2 r) {
 internal b32
 range2_contains(Range2 r, Vector2 v) {
   b32 result = (r.min.x <= v.x && v.x < r.max.x && r.min.y <= v.y && v.y < r.max.y);
+  return(result);
+}
+
+////////////////////////////////
+// NOTE: Colors
+
+internal u32
+bgra32_from_rgba8(u8 r, u8 g, u8 b, u8 a) {
+  u32 result = ((a << 24) | (r << 16) | (g << 8) | (b << 0));
+  return(result);
+}
+
+internal void
+rgba8_from_bgra32(u32 hex, u8 *r, u8 *g, u8 *b, u8 *a) {
+  *b = ((hex >>  0) & 0xff);
+  *g = ((hex >>  8) & 0xff);
+  *r = ((hex >> 16) & 0xff);
+  *a = ((hex >> 24) & 0xff);
+}
+
+internal u32
+bgra32_from_rgba4(Vector4 v) {
+  v = vector4_clamp_zo(v);
+  v = vector4_muls(v, 255.0f);
+  u32 result = bgra32_from_rgba8(v.x, v.y, v.z, v.w);
+  return(result);
+}
+
+internal Vector4
+rgba4_from_bgra32(u32 hex) {
+  u8 r, g, b, a;
+  rgba8_from_bgra32(hex, &r, &g, &b, &a);
+  Vector4 result = vector4_make(r/255.0f, g/255.0f, b/255.0f, a/255.0f);
   return(result);
 }

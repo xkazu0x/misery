@@ -62,6 +62,12 @@ union Range2 {
 #define sin_f32(x)    sinf(x)
 #define cos_f32(x)    cosf(x)
 #define tan_f32(x)    tanf(x)
+#define rad_from_turn_f32(x) ((x)*(tau32))
+#define turn_from_rad_f32(x) ((x)/(tau32))
+#define deg_from_turn_f32(x) ((x)*(360.0f))
+#define turn_from_deg_f32(x) ((x)/(360.0f))
+#define deg_from_rad_f32(x) (deg_from_turn_f32(turn_from_rad_f32(x)))
+#define rad_from_deg_f32(x) (rad_from_turn_f32(turn_from_deg_f32(x)))
 
 #define sqrt_f64(x)   sqrt(x)
 #define cbrt_f64(x)   cbrt(x)
@@ -74,6 +80,12 @@ union Range2 {
 #define sin_f64(x)    sin(x)
 #define cos_f64(x)    cos(x)
 #define tan_f64(x)    tan(x)
+#define rad_from_turn_f64(x) ((x)*(tau64))
+#define turn_from_rad_f64(x) ((x)/(tau64))
+#define deg_from_turn_f64(x) ((x)*(360.0))
+#define turn_from_deg_f64(x) ((x)/(360.0))
+#define deg_from_rad_f64(x) (deg_from_turn_f64(turn_from_rad_f64(x)))
+#define rad_from_deg_f64(x) (rad_from_turn_f64(turn_from_deg_f64(x)))
 
 internal f32 lerp_f32(f32 a, f32 b, f32 t);
 internal f32 lerpc_f32(f32 a, f32 b, f32 t);
@@ -94,15 +106,17 @@ internal Vector2 vector2_adds(Vector2 v, f32 s);
 internal Vector2 vector2_subs(Vector2 v, f32 s);
 internal Vector2 vector2_muls(Vector2 v, f32 s);
 internal Vector2 vector2_divs(Vector2 v, f32 s);
+internal f32 vector2_dot(Vector2 a, Vector2 b);
+internal f32 vector2_norm2(Vector2 v);
+internal f32 vector2_norm(Vector2 v);
 internal Vector2 vector2_negate(Vector2 v);
 internal Vector2 vector2_normalize(Vector2 v);
 internal Vector2 vector2_rotate(Vector2 v, f32 angle);
+internal Vector2 vector2_clamp(Vector2 v, f32 a, f32 b);
+internal Vector2 vector2_clamp_zo(Vector2 v);
 internal Vector2 vector2_lerp(Vector2 a, Vector2 b, f32 t);
 internal Vector2 vector2_lerpc(Vector2 a, Vector2 b, f32 t);
-internal f32 vector2_dot(Vector2 a, Vector2 b);
 internal f32 vector2_cross(Vector2 a, Vector2 b);
-internal f32 vector2_norm2(Vector2 v);
-internal f32 vector2_norm(Vector2 v);
 
 // NOTE: vector3
 internal Vector3 vector3_zero(void);
@@ -118,15 +132,17 @@ internal Vector3 vector3_adds(Vector3 v, f32 s);
 internal Vector3 vector3_subs(Vector3 v, f32 s);
 internal Vector3 vector3_muls(Vector3 v, f32 s);
 internal Vector3 vector3_divs(Vector3 v, f32 s);
+internal f32 vector3_dot(Vector3 a, Vector3 b);
+internal f32 vector3_norm2(Vector3 v);
+internal f32 vector3_norm(Vector3 v);
 internal Vector3 vector3_negate(Vector3 v);
 internal Vector3 vector3_normalize(Vector3 v);
+internal Vector3 vector3_clamp(Vector3 v, f32 a, f32 b);
+internal Vector3 vector3_clamp_zo(Vector3 v);
 internal Vector3 vector3_lerp(Vector3 a, Vector3 b, f32 t);
 internal Vector3 vector3_lerpc(Vector3 a, Vector3 b, f32 t);
 internal Vector3 vector3_cross(Vector3 a, Vector3 b);
 internal Vector3 vector3_crossn(Vector3 a, Vector3 b);
-internal f32 vector3_dot(Vector3 a, Vector3 b);
-internal f32 vector3_norm2(Vector3 v);
-internal f32 vector3_norm(Vector3 v);
 
 // NOTE: vector4
 internal Vector4 vector4_zero(void);
@@ -142,18 +158,15 @@ internal Vector4 vector4_adds(Vector4 v, f32 s);
 internal Vector4 vector4_subs(Vector4 v, f32 s);
 internal Vector4 vector4_muls(Vector4 v, f32 s);
 internal Vector4 vector4_divs(Vector4 v, f32 s);
-internal Vector4 vector4_negate(Vector4 v);
-internal Vector4 vector4_normalize(Vector4 v);
-internal Vector4 vector4_lerp(Vector4 a, Vector4 b, f32 t);
-internal Vector4 vector4_lerpc(Vector4 a, Vector4 b, f32 t);
 internal f32 vector4_dot(Vector4 a, Vector4 b);
 internal f32 vector4_norm2(Vector4 v);
 internal f32 vector4_norm(Vector4 v);
-
-// NOTE: helpers
-#define v2(x,y)     vector2_make((x),(y))
-#define v3(x,y,z)   vector3_make((x),(y),(z))
-#define v4(x,y,z,w) vector4_make((x),(y),(z),(w))
+internal Vector4 vector4_negate(Vector4 v);
+internal Vector4 vector4_normalize(Vector4 v);
+internal Vector4 vector4_clamp(Vector4 v, f32 a, f32 b);
+internal Vector4 vector4_clamp_zo(Vector4 v);
+internal Vector4 vector4_lerp(Vector4 a, Vector4 b, f32 t);
+internal Vector4 vector4_lerpc(Vector4 a, Vector4 b, f32 t);
 
 ////////////////////////////////
 // NOTE: Matrices
@@ -181,5 +194,13 @@ internal Range2 range2_make(f32 x0, f32 y0, f32 x1, f32 y1);
 internal Range2 range2_min_max(Vector2 min, Vector2 max);
 internal Vector2 range2_dim(Range2 r);
 internal b32 range2_contains(Range2 r, Vector2 v);
+
+////////////////////////////////
+// NOTE: Colors
+
+internal u32 bgra32_from_rgba8(u8 r, u8 g, u8 b, u8 a);
+internal void rgba8_from_bgra32(u32 hex, u8 *r, u8 *g, u8 *b, u8 *a);
+internal u32 bgra32_from_rgba4(Vector4 v);
+internal Vector4 rgba4_from_bgra32(u32 hex);
 
 #endif // BASE_MATH_H
