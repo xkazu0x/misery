@@ -259,7 +259,7 @@ get_bayer8(s32 x, s32 y) {
 }
 
 internal void
-dithering_quantization_value_mapping_example(SR_Canvas *canvas) {
+dithering_quantization_value_mapping_example(SR_Canvas canvas) {
   u32 color_map[] = {
     0x06060e,
     0x361c7d,
@@ -274,17 +274,17 @@ dithering_quantization_value_mapping_example(SR_Canvas *canvas) {
   u32 num_color_map = array_count(color_map);
 
   // NOTE: fill with gradient
-  for (s32 y = 0; y < canvas->h; y += 1) {
-    for (s32 x = 0; x < canvas->w; x += 1) {
+  for (s32 y = 0; y < canvas.h; y += 1) {
+    for (s32 x = 0; x < canvas.w; x += 1) {
       u32 color = ((y%256) << 16) | ((x%256) << 8);
-      canvas->data[y*canvas->p + x] = color; 
+      canvas.data[y*canvas.p + x] = color; 
     }
   }
 
   // NOTE: apply dithering, quantization and value mappping
-  for (s32 y = 0; y < canvas->h; y += 1) {
-    for (s32 x = 0; x < canvas->w; x += 1) {
-      u32 pixel = canvas->data[y*canvas->p + x];
+  for (s32 y = 0; y < canvas.h; y += 1) {
+    for (s32 x = 0; x < canvas.w; x += 1) {
+      u32 pixel = canvas.data[y*canvas.p + x];
       Vector4 color = rgba4_from_bgra32(pixel);
 
       // NOTE: bayer dithering
@@ -302,19 +302,19 @@ dithering_quantization_value_mapping_example(SR_Canvas *canvas) {
       // NOTE: value mapping
       f32 t = (color.x+color.y+color.z)/3.0f;
       u32 color_map_idx = round_t(u32, t*num_color_map);
-      canvas->data[y*canvas->p + x] = color_map[color_map_idx];
+      canvas.data[y*canvas.p + x] = color_map[color_map_idx];
 
-      // canvas->data[y*canvas->p + x] = bgra32_from_rgba4(color);
+      // canvas.data[y*canvas.p + x] = bgra32_from_rgba4(color);
     }
   }
 }
 
 internal void
-wheel_example(SR_Canvas *canvas) {
+wheel_example(SR_Canvas canvas) {
   sr_fill(canvas, C_BLACK);
 
-  s32 off_x = canvas->w/2;
-  s32 off_y = canvas->h/2;
+  s32 off_x = canvas.w/2;
+  s32 off_y = canvas.h/2;
   s32 dim = 2;
 
   local f32 off_theta = 0.0f;
@@ -361,7 +361,7 @@ frame(void) {
     }
   }
 
-  SR_Canvas *canvas = &m_state->canvas;
+  SR_Canvas canvas = m_state->canvas;
   // dithering_quantization_value_mapping_example(canvas);
   wheel_example(canvas);
   r_end();

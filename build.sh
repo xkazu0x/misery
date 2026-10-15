@@ -32,15 +32,21 @@ fi
 # --- Prep Directories --------------------------------------------------------
 mkdir -p build
 
-# --- Build -------------------------------------------------------------------
+# --- Build Target ------------------------------------------------------------
 cd build
-$compile ../src/scratch_main.c $cc_link $cc_os_gfx $cc_render -o scratch
-if [[ -v run ]]; then ./scratch; fi
+if [[ "${scratch:-0}" == "1" ]]; then
+  did_build=1 && $compile ../src/scratch_main.c $cc_link $cc_os_gfx $cc_render -o scratch;
+  if [[ -v run ]]; then ./scratch; fi
+fi
 
-# $compile ../src/misery_main.c $cc_link $cc_os_gfx $cc_render -o misery
-# if [[ -v run ]]; then ./misery; fi
-
-# $compile ../src/raycaster_main.c $cc_link $cc_os_gfx $cc_render -o raycaster
-# if [[ -v run ]]; then ./raycaster; fi
-
+if [[ "${raycasting:-0}" == "1" ]]; then
+  did_build=1 && $compile ../src/raycasting_main.c $cc_link $cc_os_gfx $cc_render -o raycasting;
+  if [[ -v run ]]; then ./raycasting; fi
+fi
 cd ..
+
+# --- Warn On No Builds -------------------------------------------------------
+if [[ "${did_build:-0}" == "0" ]]; then
+  echo "[WARN] no valid build target specified."
+  exit 1
+fi
