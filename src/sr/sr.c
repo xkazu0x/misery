@@ -27,36 +27,6 @@ sr_canvas_from(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h) {
 }
 
 internal void
-sr__line_horz(SR_Canvas canvas, s32 y, s32 x0, s32 x1, u32 color) {
-  if (x0 < 0) x0 = 0;
-  if (x1 > canvas.w - 1) x1 = canvas.w - 1;
-  if (y >= 0 && y < canvas.h) {
-    for (s32 x = x0; x <= x1; x += 1) {
-      canvas.data[y*canvas.pitch + x] = color;
-    }
-  }
-}
-
-internal void
-sr__line_vert(SR_Canvas canvas, s32 x, s32 y0, s32 y1, u32 color) {
-  if (y0 < 0) y0 = 0;
-  if (y1 > canvas.h - 1) y1 = canvas.h - 1;
-  if (x >= 0 && x < canvas.h) {
-    for (s32 y = y0; y <= y1; y += 1) {
-      canvas.data[y*canvas.pitch + x] = color;
-    }
-  }
-}
-
-internal void
-sr__circf_lines_horz(SR_Canvas canvas, s32 cx, s32 cy, s32 x, s32 y, u32 color) {
-  sr__line_horz(canvas, cy+y, cx-x, cx+x, color);
-  if (y != 0) {
-    sr__line_horz(canvas, cy-y, cx-x, cx+x, color);
-  }
-}
-
-internal void
 sr_fill(SR_Canvas canvas, u32 color) {
   for (s32 y = 0; y < canvas.h; y += 1) {
     for (s32 x = 0; x < canvas.w; x += 1) {
@@ -69,6 +39,28 @@ internal void
 sr_pixel(SR_Canvas canvas, s32 x, s32 y, u32 color) {
   if (x >= 0 && x < canvas.w && y >= 0 && y < canvas.h) {
     canvas.data[y*canvas.pitch + x] = color;
+  }
+}
+
+internal void
+sr_lineh(SR_Canvas canvas, s32 y, s32 x0, s32 x1, u32 color) {
+  if (x0 < 0) x0 = 0;
+  if (x1 > canvas.w - 1) x1 = canvas.w - 1;
+  if (y >= 0 && y < canvas.h) {
+    for (s32 x = x0; x <= x1; x += 1) {
+      canvas.data[y*canvas.pitch + x] = color;
+    }
+  }
+}
+
+internal void
+sr_linev(SR_Canvas canvas, s32 x, s32 y0, s32 y1, u32 color) {
+  if (y0 < 0) y0 = 0;
+  if (y1 > canvas.h - 1) y1 = canvas.h - 1;
+  if (x >= 0 && x < canvas.h) {
+    for (s32 y = y0; y <= y1; y += 1) {
+      canvas.data[y*canvas.pitch + x] = color;
+    }
   }
 }
 
@@ -122,10 +114,10 @@ sr_rectf(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color) {
 
 internal void
 sr_rectl(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color) {
-  sr__line_horz(canvas, y0, x0, x1, color);
-  sr__line_horz(canvas, y1, x0, x1, color);
-  sr__line_vert(canvas, x0, y0, y1, color);
-  sr__line_vert(canvas, x1, y0, y1, color);
+  sr_lineh(canvas, y0, x0, x1, color);
+  sr_lineh(canvas, y1, x0, x1, color);
+  sr_linev(canvas, x0, y0, y1, color);
+  sr_linev(canvas, x1, y0, y1, color);
 }
 
 internal void
@@ -177,4 +169,12 @@ sr_rectf_wh(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h, u32 color) {
 internal void
 sr_rectl_wh(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h, u32 color) {
   sr_rectl(canvas, x, y, x+w-1, y+h-1, color);
+}
+
+internal void
+sr__circf_lines_horz(SR_Canvas canvas, s32 cx, s32 cy, s32 x, s32 y, u32 color) {
+  sr_lineh(canvas, cy+y, cx-x, cx+x, color);
+  if (y != 0) {
+    sr_lineh(canvas, cy-y, cx-x, cx+x, color);
+  }
 }

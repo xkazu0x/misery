@@ -30,7 +30,7 @@
 #define SCREEN_W 128
 #define SCREEN_H 128
 
-#define TILE_SIZE 32
+#define TILE_SIZE 16
 
 #define MAP_NUM_COLS 8
 #define MAP_NUM_ROWS 8
@@ -38,7 +38,7 @@
 #define MAP_REAL_W MAP_NUM_COLS*TILE_SIZE
 #define MAP_REAL_H MAP_NUM_ROWS*TILE_SIZE
 
-#define MAP_MINI_SCALE 0.25f
+#define MAP_MINI_SCALE 1.0f/(TILE_SIZE/8.0f)
 #define MAP_MINI_W MAP_REAL_W*MAP_MINI_SCALE
 #define MAP_MINI_H MAP_REAL_H*MAP_MINI_SCALE
 
@@ -104,9 +104,19 @@ global String8 r_ogl_rect_fshad_src = str8_lit_comp(
   "}"
 );
 
+typedef struct Ray Ray;
+struct Ray {
+  b32 hit;
+  f32 hit_x;
+  f32 hit_y;
+  f32 hit_len;
+  b32 hit_is_vert;
+};
+
 typedef struct M_State M_State;
 struct M_State {
   Arena *arena;
+  Arena *frame_arena;
   WM_Window window;
   SR_Canvas canvas;
   GLuint canvas_tex;
@@ -115,6 +125,9 @@ struct M_State {
   GLuint scratch_buffer_64kb;
   WM_Key curr_key_state[WM_Key_COUNT];
   WM_Key prev_key_state[WM_Key_COUNT];
+  f32 fov_angle;
+  u32 ray_count;
+  Ray *rays;
   f32 dim;
   f32 pos_x;
   f32 pos_y;
@@ -268,11 +281,111 @@ get_world_map_idx(s32 x, s32 y) {
   return(result);
 }
 
-typedef struct Ray_Cast Ray_Cast;
-struct Ray_Cast {
-  b32 hit;
-  f32 x, y;
-};
+internal Ray
+ray_cast(f32 ray_x, f32 ray_y, f32 angle) {
+  Ray result = {0};
+
+  f32 intercept_x, intercept_y;
+  f32 step_x, step_y;
+
+  f32 ray_angle = mod_f32(angle, tau32);
+  if (ray_angle < 0.0f) ray_angle += tau32;
+
+  b32 ray_is_facing_down  = (ray_angle > 0.0f      && ray_angle < pi32);
+  b32 ray_is_facing_right = (ray_angle > pi32*1.5f || ray_angle < pi32*0.5f);
+  b32 ray_is_facing_up    = !ray_is_facing_down;
+  b32 ray_is_facing_left  = !ray_is_facing_right;
+
+  // NOTE: vertical intersection
+  b32 vert_hit = 0;
+  f32 vert_hit_x = 0;
+  f32 vert_hit_y = 0;
+  {
+    intercept_y = floor_f32(ray_y/TILE_SIZE)*TILE_SIZE;
+    intercept_y += (ray_is_facing_down) ? TILE_SIZE : 0;
+    intercept_x = ray_x + (intercept_y - ray_y)/tan_f32(ray_angle);
+
+    step_y = TILE_SIZE;
+    step_y *= (ray_is_facing_up) ? -1.0f : 1.0f;
+
+    step_x = TILE_SIZE/tan_f32(ray_angle);
+    step_x *= (ray_is_facing_left  && step_x > 0.0f) ? -1.0f : 1.0f;
+    step_x *= (ray_is_facing_right && step_x < 0.0f) ? -1.0f : 1.0f;
+
+    f32 dx = intercept_x;
+    f32 dy = intercept_y;
+
+    while (dx >= 0 && dx <= MAP_REAL_W && dy >= 0 && dy <= MAP_REAL_H) {
+      f32 tile_x = dx;
+      f32 tile_y = dy;
+      if (ray_is_facing_up) tile_y -= 1.0f;
+      tile_x = floor_f32(tile_x/TILE_SIZE);
+      tile_y = floor_f32(tile_y/TILE_SIZE);
+      if (get_world_map_idx(tile_x, tile_y) == 1) {
+        vert_hit = 1;
+        vert_hit_x = dx;
+        vert_hit_y = dy;
+        break;
+      } else {
+        dx += step_x;
+        dy += step_y;
+      }
+    }
+  } // NOTE: vertical intersection
+
+  // NOTE: horizontal intersection
+  b32 horz_hit = 0;
+  f32 horz_hit_x = 0;
+  f32 horz_hit_y = 0;
+  {
+    intercept_x = floor_f32(ray_x/TILE_SIZE)*TILE_SIZE;
+    intercept_x += (ray_is_facing_right) ? TILE_SIZE : 0;
+    intercept_y = ray_y + (intercept_x - ray_x)*tan_f32(ray_angle);
+
+    step_x = TILE_SIZE;
+    step_x *= (ray_is_facing_left) ? -1.0f : 1.0f;
+
+    step_y = TILE_SIZE*tan_f32(ray_angle);
+    step_y *= (ray_is_facing_up   && step_y > 0.0f) ? -1.0f : 1.0f;
+    step_y *= (ray_is_facing_down && step_y < 0.0f) ? -1.0f : 1.0f;
+
+    f32 dx = intercept_x;
+    f32 dy = intercept_y;
+
+    while (dx >= 0 && dx <= MAP_REAL_W && dy >= 0 && dy <= MAP_REAL_H) {
+      f32 tile_x = dx;
+      f32 tile_y = dy;
+      if (ray_is_facing_left) tile_x -= 1;
+      tile_x = floor_f32(tile_x/TILE_SIZE);
+      tile_y = floor_f32(tile_y/TILE_SIZE);
+      if (get_world_map_idx(tile_x, tile_y) == 1) {
+        horz_hit = 1;
+        horz_hit_x = dx;
+        horz_hit_y = dy;
+        break;
+      } else {
+        dx += step_x;
+        dy += step_y;
+      }
+    }
+  } // NOTE: horizontal intersection
+
+  if (vert_hit || horz_hit) {
+    f32 vert_hit_len = max_f32;
+    f32 horz_hit_len = max_f32;
+
+    if (vert_hit) vert_hit_len = sqrt_f32(pow2(vert_hit_x - ray_x) + pow2(vert_hit_y - ray_y));
+    if (horz_hit) horz_hit_len = sqrt_f32(pow2(horz_hit_x - ray_x) + pow2(horz_hit_y - ray_y));
+
+    result.hit = 1;
+    result.hit_x = (horz_hit_len < vert_hit_len) ? horz_hit_x : vert_hit_x;
+    result.hit_y = (horz_hit_len < vert_hit_len) ? horz_hit_y : vert_hit_y;
+    result.hit_len = (horz_hit_len < vert_hit_len) ? horz_hit_len : vert_hit_len;
+    result.hit_is_vert = (vert_hit_len < horz_hit_len);
+  }
+
+  return(result);
+}
 
 internal void
 draw_2d(SR_Canvas canvas) {
@@ -282,12 +395,12 @@ draw_2d(SR_Canvas canvas) {
     s32 x1 = (MAP_NUM_COLS*TILE_SIZE - 1)*MAP_MINI_SCALE;
     s32 y0 = 0;
     s32 y1 = (MAP_NUM_ROWS*TILE_SIZE - 1)*MAP_MINI_SCALE;
-    u32 color = C_DARK_BLUE;
+    u32 color = C_LIGHT_GREY;
     for (s32 dx = 0; dx < MAP_NUM_COLS; dx += 1) {
-      sr__line_vert(canvas, dx*TILE_SIZE*MAP_MINI_SCALE, y0, y1, color);
+      sr_linev(canvas, dx*TILE_SIZE*MAP_MINI_SCALE, y0, y1, color);
     }
     for (s32 dy = 0; dy < MAP_NUM_ROWS; dy += 1) {
-      sr__line_horz(canvas, dy*TILE_SIZE*MAP_MINI_SCALE, x0, x1, color);
+      sr_lineh(canvas, dy*TILE_SIZE*MAP_MINI_SCALE, x0, x1, color);
     }
   }
 
@@ -300,7 +413,7 @@ draw_2d(SR_Canvas canvas) {
           s32 y = dy*TILE_SIZE*MAP_MINI_SCALE;
           s32 w = TILE_SIZE*MAP_MINI_SCALE;
           s32 h = TILE_SIZE*MAP_MINI_SCALE;
-          sr_rectf_wh(canvas, x, y, w, h, C_DARK_GREEN);
+          sr_rectf_wh(canvas, x, y, w, h, C_DARK_BLUE);
         }
       }
     }
@@ -316,132 +429,15 @@ draw_2d(SR_Canvas canvas) {
 
   // NOTE: raycast
   {
-    f32 fov_angle = rad_from_deg_f32(60.0f);
-    f32 ray_count = SCREEN_W;
-
     f32 ray_x = m_state->pos_x;
     f32 ray_y = m_state->pos_y;
-
-    f32 ray_angle_t    = m_state->dir_angle - fov_angle*0.5f;
-    f32 ray_angle_step = fov_angle/ray_count;
-
-    for (u32 idx = 0; idx < ray_count; idx += 1, ray_angle_t += ray_angle_step) {
-      f32 intercept_x, intercept_y;
-      f32 step_x, step_y;
-
-      f32 ray_angle = mod_f32(ray_angle_t, tau32);
-      if (ray_angle < 0.0f) ray_angle += tau32;
-
-      b32 ray_is_facing_down  = (ray_angle > 0.0f      && ray_angle < pi32);
-      b32 ray_is_facing_right = (ray_angle > pi32*1.5f || ray_angle < pi32*0.5f);
-      b32 ray_is_facing_up    = !ray_is_facing_down;
-      b32 ray_is_facing_left  = !ray_is_facing_right;
-
-      // NOTE: vertical intersection
-      b32 vert_hit = 0;
-      f32 vert_hit_x = 0;
-      f32 vert_hit_y = 0;
-      {
-        intercept_y = floor_f32(ray_y/TILE_SIZE)*TILE_SIZE;
-        intercept_y += (ray_is_facing_down) ? TILE_SIZE : 0;
-        intercept_x = ray_x + (intercept_y - ray_y)/tan_f32(ray_angle);
-
-        step_y = TILE_SIZE;
-        step_y *= (ray_is_facing_up) ? -1.0f : 1.0f;
-
-        step_x = TILE_SIZE/tan_f32(ray_angle);
-        step_x *= (ray_is_facing_left  && step_x > 0.0f) ? -1.0f : 1.0f;
-        step_x *= (ray_is_facing_right && step_x < 0.0f) ? -1.0f : 1.0f;
-
-        f32 hit_x = intercept_x;
-        f32 hit_y = intercept_y;
-
-        while (hit_x >= 0 && hit_x <= MAP_REAL_W && hit_y >= 0 && hit_y <= MAP_REAL_H) {
-          f32 tile_x = hit_x;
-          f32 tile_y = hit_y;
-          if (ray_is_facing_up) tile_y -= 1.0f;
-          tile_x = floor_f32(tile_x/TILE_SIZE);
-          tile_y = floor_f32(tile_y/TILE_SIZE);
-          if (get_world_map_idx(tile_x, tile_y) == 1) {
-            vert_hit = 1;
-            vert_hit_x = hit_x;
-            vert_hit_y = hit_y;
-            break;
-          } else {
-            hit_x += step_x;
-            hit_y += step_y;
-          }
-        }
-      } // NOTE: vertical intersection
-
-      // NOTE: horizontal intersection
-      b32 horz_hit = 0;
-      f32 horz_hit_x = 0;
-      f32 horz_hit_y = 0;
-      {
-        intercept_x = floor_f32(ray_x/TILE_SIZE)*TILE_SIZE;
-        intercept_x += (ray_is_facing_right) ? TILE_SIZE : 0;
-        intercept_y = ray_y + (intercept_x - ray_x)*tan_f32(ray_angle);
-
-        step_x = TILE_SIZE;
-        step_x *= (ray_is_facing_left) ? -1.0f : 1.0f;
-
-        step_y = TILE_SIZE*tan_f32(ray_angle);
-        step_y *= (ray_is_facing_up   && step_y > 0.0f) ? -1.0f : 1.0f;
-        step_y *= (ray_is_facing_down && step_y < 0.0f) ? -1.0f : 1.0f;
-
-        f32 hit_x = intercept_x;
-        f32 hit_y = intercept_y;
-
-        while (hit_x >= 0 && hit_x <= MAP_REAL_W && hit_y >= 0 && hit_y <= MAP_REAL_H) {
-          f32 tile_x = hit_x;
-          f32 tile_y = hit_y;
-          if (ray_is_facing_left) tile_x -= 1;
-          tile_x = floor_f32(tile_x/TILE_SIZE);
-          tile_y = floor_f32(tile_y/TILE_SIZE);
-          if (get_world_map_idx(tile_x, tile_y) == 1) {
-            horz_hit = 1;
-            horz_hit_x = hit_x;
-            horz_hit_y = hit_y;
-            break;
-          } else {
-            hit_x += step_x;
-            hit_y += step_y;
-          }
-        }
-      } // NOTE: horizontal intersection
-
-      // if (vert_hit) {
-      //   s32 x0 = ray_x*MAP_MINI_SCALE;
-      //   s32 y0 = ray_y*MAP_MINI_SCALE;
-      //   s32 x1 = (vert_hit_x - 1)*MAP_MINI_SCALE;
-      //   s32 y1 = (vert_hit_y - 1)*MAP_MINI_SCALE;
-      //   sr_line(canvas, x0, y0, x1, y1, C_YELLOW);
-      // }
-      // if (horz_hit) {
-      //   s32 x0 = ray_x*MAP_MINI_SCALE;
-      //   s32 y0 = ray_y*MAP_MINI_SCALE;
-      //   s32 x1 = (horz_hit_x - 1)*MAP_MINI_SCALE;
-      //   s32 y1 = (horz_hit_y - 1)*MAP_MINI_SCALE;
-      //   sr_line(canvas, x0, y0, x1, y1, C_GREEN);
-      // }
-
-      if (vert_hit || horz_hit) {
-        f32 vert_hit_len = max_f32;
-        f32 horz_hit_len = max_f32;
-
-        if (vert_hit) vert_hit_len = sqrt_f32(pow2(vert_hit_x - ray_x) + pow2(vert_hit_y - ray_y));
-        if (horz_hit) horz_hit_len = sqrt_f32(pow2(horz_hit_x - ray_x) + pow2(horz_hit_y - ray_y));
-
-        f32 wall_hit_x = (horz_hit_len < vert_hit_len) ? horz_hit_x : vert_hit_x;
-        f32 wall_hit_y = (horz_hit_len < vert_hit_len) ? horz_hit_y : vert_hit_y;
-        // TODO: distance
-        // TODO: is_hit_vert
-
+    for (u32 idx = 0; idx < m_state->ray_count; idx += 1) {
+      Ray ray = m_state->rays[idx];
+      if (ray.hit) {
         s32 x0 = ray_x*MAP_MINI_SCALE;
         s32 y0 = ray_y*MAP_MINI_SCALE;
-        s32 x1 = (wall_hit_x - 1)*MAP_MINI_SCALE;
-        s32 y1 = (wall_hit_y - 1)*MAP_MINI_SCALE;
+        s32 x1 = (ray.hit_x - 1)*MAP_MINI_SCALE;
+        s32 y1 = (ray.hit_y - 1)*MAP_MINI_SCALE;
         sr_line(canvas, x0, y0, x1, y1, C_YELLOW);
       }
     }
@@ -468,10 +464,17 @@ draw_2d(SR_Canvas canvas) {
 
 internal void
 draw_3d(SR_Canvas canvas) {
-  for (s32 y = 0; y < canvas.h; y += 1) {
-    for (s32 x = 0; x < canvas.w; x += 1) {
-      u32 color = ((y%255) << 8) | ((x%255) << 0);
-      canvas.data[y*canvas.pitch + x] = color;
+  // NOTE: raycast project
+  {
+    f32 fov_angle = m_state->fov_angle;
+    f32 plane_d = SCREEN_W*0.5f/tan_f32(fov_angle*0.5f);
+    for (u32 idx = 0; idx < m_state->ray_count; idx += 1) {
+      Ray ray = m_state->rays[idx];
+      if (ray.hit) {
+        f32 h = (TILE_SIZE/ray.hit_len)*plane_d;
+        f32 y = (SCREEN_H - h)/2;
+        sr_linev(canvas, idx, y, y+h-1, C_DARK_BLUE);
+      }
     }
   }
 }
@@ -518,6 +521,25 @@ frame(void) {
       m_state->pos_x = new_pos_x;
       m_state->pos_y = new_pos_y;
     }
+
+    // NOTE: raycast
+    {
+      m_state->rays = push_array(m_state->frame_arena, Ray, m_state->ray_count);
+
+      f32 fov_angle = m_state->fov_angle;
+      u32 ray_count = m_state->ray_count;
+
+      f32 ray_x = m_state->pos_x;
+      f32 ray_y = m_state->pos_y;
+
+      f32 ray_angle_t    = m_state->dir_angle - fov_angle*0.5f;
+      f32 ray_angle_step = fov_angle/ray_count;
+
+      for (u32 idx = 0; idx < ray_count; idx += 1) {
+        m_state->rays[idx] = ray_cast(ray_x, ray_y, ray_angle_t);
+        ray_angle_t += ray_angle_step;
+      }
+    }
   }
 
   // NOTE: draw
@@ -534,6 +556,7 @@ frame(void) {
   // NOTE: end
   r_end();
   memory_copy_array(m_state->prev_key_state, m_state->curr_key_state);
+  arena_clear(m_state->frame_arena);
 
   scratch_end(scratch);
   return(should_quit);
@@ -545,6 +568,7 @@ entry_point(int argc, char **argv) {
   Arena *arena = arena_alloc();
   m_state = push_array(arena, M_State, 1);
   m_state->arena = arena;
+  m_state->frame_arena = arena_alloc();
 
   wm_init();
   r_init();
@@ -560,11 +584,14 @@ entry_point(int argc, char **argv) {
   m_state->window = wm_window_open(window_name, window_size);
   r_ogl_os_window_equip(m_state->window);
 
+  m_state->fov_angle = rad_from_deg_f32(60.0f);
+  m_state->ray_count = SCREEN_W;
+
   m_state->dim = 2.0f;
   m_state->pos_x = 2.0f*TILE_SIZE;
   m_state->pos_y = 2.0f*TILE_SIZE;
   m_state->dir_delta = 0.0f;
-  m_state->dir_speed = rad_from_deg_f32(4.0f);
+  m_state->dir_speed = rad_from_deg_f32(2.5f);
   m_state->dir_angle = 0.0f;
   m_state->mov_delta = 0.0f;
   m_state->mov_speed = 0.05f*TILE_SIZE;
