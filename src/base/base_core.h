@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 #include <string.h>
 
 #if CC_MSVC || (CC_CLANG && OS_WINDOWS)
@@ -329,6 +330,9 @@ global f64 pi64  = 3.141592653589793;
 
 global f32 tau32 = 6.283185307179586f;
 global f64 tau64 = 6.283185307179586;
+
+global f32 max_f32 = FLT_MAX;
+global f32 min_f32 = -FLT_MAX;
 
 global u8  max_u8  = 0xff;
 global u16 max_u16 = 0xffff;

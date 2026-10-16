@@ -39,9 +39,9 @@ if [[ "${scratch:-0}" == "1" ]]; then
   if [[ -v run ]]; then ./scratch; fi
 fi
 
-if [[ "${raycasting:-0}" == "1" ]]; then
-  did_build=1 && $compile ../src/raycasting_main.c $cc_link $cc_os_gfx $cc_render -o raycasting;
-  if [[ -v run ]]; then ./raycasting; fi
+if [[ "${raycaster:-0}" == "1" ]]; then
+  did_build=1 && $compile ../src/raycaster_main.c $cc_link $cc_os_gfx $cc_render -o raycaster;
+  if [[ -v run ]]; then ./raycaster; fi
 fi
 cd ..
 
