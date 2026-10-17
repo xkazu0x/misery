@@ -126,6 +126,11 @@ struct M_State {
   GLuint scratch_buffer_64kb;
   WM_Key curr_key_state[WM_Key_COUNT];
   WM_Key prev_key_state[WM_Key_COUNT];
+  f32 refresh_rate;
+  f32 target_sec_per_frame;
+  u64 time_start;
+  u64 time_end;
+  u64 us_per_frame;
   f32 fov_angle;
   u32 ray_count;
   Ray *rays;
@@ -517,6 +522,8 @@ frame(void) {
 
   // NOTE: update
   {
+    f32 dt = m_state->target_sec_per_frame;
+
     m_state->mov_delta = 0.0f;
     m_state->dir_delta = 0.0f;
 
@@ -525,11 +532,11 @@ frame(void) {
     if (key_down(WM_Key_LEFT))  m_state->dir_delta =-1.0f;
     if (key_down(WM_Key_RIGHT)) m_state->dir_delta = 1.0f;
 
-    m_state->dir_angle += m_state->dir_delta*m_state->dir_speed;
+    m_state->dir_angle += m_state->dir_delta*m_state->dir_speed*dt;
     f32 dir_x = cos_f32(m_state->dir_angle);
     f32 dir_y = sin_f32(m_state->dir_angle);
 
-    f32 mov_step = m_state->mov_delta*m_state->mov_speed;
+    f32 mov_step = m_state->mov_delta*m_state->mov_speed*dt;
     f32 new_pos_x = m_state->pos_x + dir_x*mov_step;
     f32 new_pos_y = m_state->pos_y + dir_y*mov_step;
 
@@ -571,7 +578,30 @@ frame(void) {
     draw_3d(canvas3d);
   }
 
-  // NOTE: end
+  // NOTE: wait to flip
+  {
+    u64 time_end = get_time_us();
+    f32 sec_per_frame = (time_end - m_state->time_start)/million(1.0f);
+    if (sec_per_frame < m_state->target_sec_per_frame) {
+      u32 ms_to_sleep = (u32)((m_state->target_sec_per_frame - sec_per_frame)*thousand(1.0f));
+      if (ms_to_sleep > 0) {
+        sleep_ms(ms_to_sleep);
+      }
+      while (sec_per_frame < m_state->target_sec_per_frame) {
+        sec_per_frame = (get_time_us() - m_state->time_start)/million(1.0f);
+      }
+    }
+  }
+
+  m_state->time_end = get_time_us();
+  m_state->us_per_frame = m_state->time_end - m_state->time_start;
+  m_state->time_start = m_state->time_end;
+
+  // f32 ms_per_frame = m_state->us_per_frame/thousand(1.0f);
+  // f32 frame_per_sec = 1.0f/(us_per_frame/million(1.0f));
+  // printf("fps: %.2f, ms: %.2f\n", frame_per_sec, ms_per_frame);
+
+  // NOTE: flip
   r_end();
   memory_copy_array(m_state->prev_key_state, m_state->curr_key_state);
   arena_clear(m_state->frame_arena);
@@ -609,11 +639,15 @@ entry_point(int argc, char **argv) {
   m_state->pos_x = 2.0f*TILE_SIZE;
   m_state->pos_y = 2.0f*TILE_SIZE;
   m_state->dir_delta = 0.0f;
-  m_state->dir_speed = rad_from_deg_f32(2.5f);
+  m_state->dir_speed = rad_from_deg_f32(160.0f);
   m_state->dir_angle = 0.0f;
   m_state->mov_delta = 0.0f;
-  m_state->mov_speed = 0.05f*TILE_SIZE;
+  m_state->mov_speed = TILE_SIZE*2.0f;
 
+  m_state->refresh_rate = 60.0f;
+  m_state->target_sec_per_frame = 1.0f/m_state->refresh_rate;
+
+  m_state->time_start = get_time_us();
   wm_window_first_paint(m_state->window);
 
   for (;!frame(););
