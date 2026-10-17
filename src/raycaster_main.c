@@ -107,10 +107,11 @@ global String8 r_ogl_rect_fshad_src = str8_lit_comp(
 typedef struct Ray Ray;
 struct Ray {
   b32 hit;
+  b32 hit_is_vert;
   f32 hit_x;
   f32 hit_y;
-  f32 hit_len;
-  b32 hit_is_vert;
+  f32 len;
+  f32 ang;
 };
 
 typedef struct M_State M_State;
@@ -378,10 +379,17 @@ ray_cast(f32 ray_x, f32 ray_y, f32 angle) {
     if (horz_hit) horz_hit_len = sqrt_f32(pow2(horz_hit_x - ray_x) + pow2(horz_hit_y - ray_y));
 
     result.hit = 1;
-    result.hit_x = (horz_hit_len < vert_hit_len) ? horz_hit_x : vert_hit_x;
-    result.hit_y = (horz_hit_len < vert_hit_len) ? horz_hit_y : vert_hit_y;
-    result.hit_len = (horz_hit_len < vert_hit_len) ? horz_hit_len : vert_hit_len;
     result.hit_is_vert = (vert_hit_len < horz_hit_len);
+    if (result.hit_is_vert) {
+      result.hit_x = vert_hit_x;
+      result.hit_y = vert_hit_y;
+      result.len   = vert_hit_len;
+    } else {
+      result.hit_x = horz_hit_x;
+      result.hit_y = horz_hit_y;
+      result.len   = horz_hit_len;
+    }
+    result.ang = ray_angle;
   }
 
   return(result);
@@ -392,10 +400,10 @@ draw_2d(SR_Canvas canvas) {
   // NOTE: grid
   {
     s32 x0 = 0;
-    s32 x1 = (MAP_NUM_COLS*TILE_SIZE - 1)*MAP_MINI_SCALE;
     s32 y0 = 0;
+    s32 x1 = (MAP_NUM_COLS*TILE_SIZE - 1)*MAP_MINI_SCALE;
     s32 y1 = (MAP_NUM_ROWS*TILE_SIZE - 1)*MAP_MINI_SCALE;
-    u32 color = C_LIGHT_GREY;
+    u32 color = C_DARK_BLUE;
     for (s32 dx = 0; dx < MAP_NUM_COLS; dx += 1) {
       sr_linev(canvas, dx*TILE_SIZE*MAP_MINI_SCALE, y0, y1, color);
     }
@@ -409,11 +417,11 @@ draw_2d(SR_Canvas canvas) {
     for (s32 dy = 0; dy < MAP_NUM_ROWS; dy += 1) {
       for (s32 dx = 0; dx < MAP_NUM_COLS; dx += 1) {
         if (get_world_map_idx(dx, dy) == 1) {
-          s32 x = dx*TILE_SIZE*MAP_MINI_SCALE;
-          s32 y = dy*TILE_SIZE*MAP_MINI_SCALE;
-          s32 w = TILE_SIZE*MAP_MINI_SCALE;
-          s32 h = TILE_SIZE*MAP_MINI_SCALE;
-          sr_rectf_wh(canvas, x, y, w, h, C_DARK_BLUE);
+          s32 x0 = dx*TILE_SIZE*MAP_MINI_SCALE;
+          s32 y0 = dy*TILE_SIZE*MAP_MINI_SCALE;
+          s32 x1 = x0 + (TILE_SIZE - 1)*MAP_MINI_SCALE;
+          s32 y1 = y0 + (TILE_SIZE - 1)*MAP_MINI_SCALE;
+          sr_rectf(canvas, x0, y0, x1, y1, C_DARK_GREEN);
         }
       }
     }
@@ -421,10 +429,11 @@ draw_2d(SR_Canvas canvas) {
 
   // NOTE: pos cell
   {
-    s32 d = TILE_SIZE*MAP_MINI_SCALE;
-    s32 x = floor_f32(m_state->pos_x/d)*MAP_MINI_SCALE;
-    s32 y = floor_f32(m_state->pos_y/d)*MAP_MINI_SCALE;
-    sr_rectf_wh(canvas, x*d, y*d, d, d, C_BLUE);
+    s32 x0 = floor_f32(m_state->pos_x/TILE_SIZE)*TILE_SIZE*MAP_MINI_SCALE;
+    s32 y0 = floor_f32(m_state->pos_y/TILE_SIZE)*TILE_SIZE*MAP_MINI_SCALE;
+    s32 x1 = x0 + (TILE_SIZE - 1)*MAP_MINI_SCALE;
+    s32 y1 = y0 + (TILE_SIZE - 1)*MAP_MINI_SCALE;
+    sr_rectf(canvas, x0, y0, x1, y1, C_BLUE);
   }
 
   // NOTE: raycast
@@ -434,10 +443,16 @@ draw_2d(SR_Canvas canvas) {
     for (u32 idx = 0; idx < m_state->ray_count; idx += 1) {
       Ray ray = m_state->rays[idx];
       if (ray.hit) {
+        f32 hit_x = ray.hit_x;
+        f32 hit_y = ray.hit_y;
+        b32 is_facing_down  = (ray.ang > 0.0f      && ray.ang < pi32);
+        b32 is_facing_right = (ray.ang > pi32*1.5f || ray.ang < pi32*0.5f);
+        if (is_facing_down)  hit_y -= 1;
+        if (is_facing_right) hit_x -= 1;
         s32 x0 = ray_x*MAP_MINI_SCALE;
         s32 y0 = ray_y*MAP_MINI_SCALE;
-        s32 x1 = (ray.hit_x - 1)*MAP_MINI_SCALE;
-        s32 y1 = (ray.hit_y - 1)*MAP_MINI_SCALE;
+        s32 x1 = hit_x*MAP_MINI_SCALE;
+        s32 y1 = hit_y*MAP_MINI_SCALE;
         sr_line(canvas, x0, y0, x1, y1, C_YELLOW);
       }
     }
@@ -471,9 +486,12 @@ draw_3d(SR_Canvas canvas) {
     for (u32 idx = 0; idx < m_state->ray_count; idx += 1) {
       Ray ray = m_state->rays[idx];
       if (ray.hit) {
-        f32 h = (TILE_SIZE/ray.hit_len)*plane_d;
+        f32 len = cos_f32(ray.ang - m_state->dir_angle)*ray.len;
+        f32 h = (TILE_SIZE/len)*plane_d;
         f32 y = (SCREEN_H - h)/2;
-        sr_linev(canvas, idx, y, y+h-1, C_DARK_BLUE);
+        u32 color = C_DARK_GREEN;
+        if (ray.hit_is_vert) color = C_GREEN;
+        sr_linev(canvas, idx, y, y+h-1, color);
       }
     }
   }
@@ -515,8 +533,8 @@ frame(void) {
     f32 new_pos_x = m_state->pos_x + dir_x*mov_step;
     f32 new_pos_y = m_state->pos_y + dir_y*mov_step;
 
-    s32 tile_x = (s32)floor_f32(new_pos_x/TILE_SIZE);
-    s32 tile_y = (s32)floor_f32(new_pos_y/TILE_SIZE);
+    s32 tile_x = floor_f32(new_pos_x/TILE_SIZE);
+    s32 tile_y = floor_f32(new_pos_y/TILE_SIZE);
     if (get_world_map_idx(tile_x, tile_y) != 1) {
       m_state->pos_x = new_pos_x;
       m_state->pos_y = new_pos_y;

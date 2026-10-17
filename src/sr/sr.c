@@ -162,16 +162,6 @@ sr_circl(SR_Canvas canvas, s32 cx, s32 cy, s32 r, u32 color) {
 }
 
 internal void
-sr_rectf_wh(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h, u32 color) {
-  sr_rectf(canvas, x, y, x+w-1, y+h-1, color);
-}
-
-internal void
-sr_rectl_wh(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h, u32 color) {
-  sr_rectl(canvas, x, y, x+w-1, y+h-1, color);
-}
-
-internal void
 sr__circf_lines_horz(SR_Canvas canvas, s32 cx, s32 cy, s32 x, s32 y, u32 color) {
   sr_lineh(canvas, cy+y, cx-x, cx+x, color);
   if (y != 0) {

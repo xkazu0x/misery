@@ -23,9 +23,6 @@ internal void sr_rectl(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 col
 internal void sr_circf(SR_Canvas canvas, s32 cx, s32 cy, s32 r, u32 color);
 internal void sr_circl(SR_Canvas canvas, s32 cx, s32 cy, s32 r, u32 color);
 
-internal void sr_rectf_wh(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h, u32 color);
-internal void sr_rectl_wh(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h, u32 color);
-
 internal void sr__circf_lines_horz(SR_Canvas canvas, s32 cx, s32 cy, s32 x, s32 y, u32 color);
 
 #endif // SR_H
