@@ -3,11 +3,13 @@
 #include "base/base.h"
 #include "wm/wm.h"
 #include "r/ogl/r_ogl.h"
+#include "img/img.h"
 #include "sr/sr.h"
 
 #include "base/base.c"
 #include "wm/wm.c"
 #include "r/ogl/r_ogl.c"
+#include "img/img.c"
 #include "sr/sr.c"
 
 #define C_BLACK                 0x000000
@@ -118,6 +120,7 @@ typedef struct M_State M_State;
 struct M_State {
   Arena *arena;
   Arena *frame_arena;
+  SR_Font font;
   WM_Window window;
   SR_Canvas canvas;
   GLuint canvas_tex;
@@ -576,6 +579,19 @@ frame(void) {
     sr_fill(canvas, C_BLACK);
     draw_2d(canvas2d);
     draw_3d(canvas3d);
+
+    {
+      Temp scratch = scratch_begin(0, 0);
+      f32 ms_per_frame = m_state->us_per_frame/thousand(1.0f);
+      f32 frames_per_sec = 1.0f/(m_state->us_per_frame/million(1.0f));
+      String8 text = str8f(scratch.arena, "%.2f\n%.2f", frames_per_sec, ms_per_frame);
+      s32 w, h;
+      sr_font_calc_dim(m_state->font, text, &w, &h);
+      s32 x = canvas.w - w - 1;
+      s32 y = 0;
+      sr_text(canvas, x, y, text, m_state->font, C_LAVENDER);
+      scratch_end(scratch);
+    }
   }
 
   // NOTE: wait to flip
@@ -610,7 +626,6 @@ frame(void) {
   return(should_quit);
 }
 
-
 internal void
 entry_point(int argc, char **argv) {
   Arena *arena = arena_alloc();
@@ -620,6 +635,23 @@ entry_point(int argc, char **argv) {
 
   wm_init();
   r_init();
+
+  String8 exec_path = get_process_info()->exec_path;
+  String8 data_path = str8_cat(m_state->arena, exec_path, s("/../data/"));
+  if (!set_current_path(data_path)) {
+    fprintf(stderr, "[FATAL]: failed to set current path to: %.*s\n", str8_varg(data_path));
+    abort_self(1);
+  }
+
+  IMG_Info img = img_load(m_state->arena, s("pico8_font.bmp"));
+  SR_Canvas atlas = sr_canvas_make(img.data, img.w, img.h, img.w);
+  String8 chars = s(" !\"#$%&'()*+,-./"
+                    "0123456789:;<=>?"
+                    "@ABCDEFGHIJKLMNO"
+                    "PQRSTUVWXYZ[\\]^_"
+                    "`abcdefghijklmno"
+                    "pqrstuvwxyz{|}~ ");
+  m_state->font = sr_font_make(m_state->arena, atlas, 4, 6, chars);
 
   s32 canvas_w = SCREEN_W + MAP_MINI_W;
   s32 canvas_h = max(SCREEN_H, MAP_MINI_H);
