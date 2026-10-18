@@ -702,16 +702,16 @@ range2_contains(Range2 r, Vector2 v) {
 
 internal u32
 bgra32_from_rgba8(u8 r, u8 g, u8 b, u8 a) {
-  u32 result = ((a << 24) | (r << 16) | (g << 8) | (b << 0));
+  u32 result = ((a << 8*3) | (r << 8*2) | (g << 8*1) | (b << 8*0));
   return(result);
 }
 
 internal void
 rgba8_from_bgra32(u32 hex, u8 *r, u8 *g, u8 *b, u8 *a) {
-  *b = ((hex >>  0) & 0xff);
-  *g = ((hex >>  8) & 0xff);
-  *r = ((hex >> 16) & 0xff);
-  *a = ((hex >> 24) & 0xff);
+  *b = extract8(hex, 0);
+  *g = extract8(hex, 1);
+  *r = extract8(hex, 2);
+  *a = extract8(hex, 3);
 }
 
 internal u32
@@ -727,5 +727,19 @@ rgba4_from_bgra32(u32 hex) {
   u8 r, g, b, a;
   rgba8_from_bgra32(hex, &r, &g, &b, &a);
   Vector4 result = vector4_make(r/255.0f, g/255.0f, b/255.0f, a/255.0f);
+  return(result);
+}
+
+internal u32
+bgra32_mul4(u32 hex, Vector4 v) {
+  u8 r, g, b, a;
+  rgba8_from_bgra32(hex, &r, &g, &b, &a);
+  u32 result = bgra32_from_rgba8(r*v.x, g*v.y, b*v.z, a*v.w);
+  return(result);
+}
+
+internal u32
+bgra32_mul(u32 hex, u32 v) {
+  u32 result = bgra32_mul4(hex, rgba4_from_bgra32(v));
   return(result);
 }
