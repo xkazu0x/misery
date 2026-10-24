@@ -265,7 +265,7 @@ str8_find_needle(String8 s, String8 needle, String_Match_Flags flags) {
   if (needle.size > 0) {
     u8 *s_opl = s.str + s.size;
     String8 needle_tail = str8_skip(needle, 1);
-    String_Match_Flags adjusted_flags = flags|String_Match_Flag_RIGHT_SIDE_SLOPPY;
+    String_Match_Flags adjusted_flags = flags | String_Match_Flag_RIGHT_SIDE_SLOPPY;
     u8 needle_first_char_adjusted = needle.str[0];
     if (adjusted_flags & String_Match_Flag_CASE_INSENSITIVE) {
       needle_first_char_adjusted = upper_from_char(needle_first_char_adjusted);

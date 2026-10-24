@@ -129,9 +129,9 @@ img__bmp_parse_header(IMG__Context *ctx, IMG__BMP_Info *info) {
   }
 }
 
-internal IMG_Info
-img_load(Arena *arena, String8 path) {
-  IMG_Info result = {0};
+internal IMG_Data
+img_data_from_file_path(Arena *arena, String8 path) {
+  IMG_Data result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   String8 path_copy = str8_copy(scratch.arena, path);
   String8 file_data = data_from_file_path(scratch.arena, path);

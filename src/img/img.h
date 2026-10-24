@@ -14,8 +14,8 @@ struct IMG__BMP_Info {
   u32 rm, gm, bm, am;
 };
 
-typedef struct IMG_Info IMG_Info;
-struct IMG_Info {
+typedef struct IMG_Data IMG_Data;
+struct IMG_Data {
   s32 w, h, n;
   void *data;
 };
@@ -29,6 +29,6 @@ internal u32          img__ctx_get32_le(IMG__Context *ctx);
 internal b32  img__bmp_test(IMG__Context *ctx);
 internal void img__bmp_parse_header(IMG__Context *ctx, IMG__BMP_Info *info);
 
-internal IMG_Info img_load(Arena *arena, String8 path);
+internal IMG_Data img_data_from_file_path(Arena *arena, String8 path);
 
 #endif // IMG_H
