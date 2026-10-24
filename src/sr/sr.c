@@ -6,11 +6,11 @@ sr_canvas_zero(void) {
 
 internal SR_Canvas
 sr_canvas_make(u32 *data, s32 w, s32 h, s32 pitch) {
-  SR_Canvas result;
-  result.data = data;
+  SR_Canvas result = {0};
   result.w = w;
   result.h = h;
   result.pitch = pitch;
+  result.data = data;
   return(result);
 }
 
@@ -27,46 +27,46 @@ sr_canvas_from(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h) {
 }
 
 internal SR_Font
-sr_font_make(Arena *arena, SR_Canvas atlas, s32 gw, s32 gh, String8 chars) {
+sr_font_make(Arena *arena, SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 *chars) {
   SR_Font result = {0};
   result.atlas = atlas;
-  result.gw = gw;
-  result.gh = gh;
-  result.gx = atlas.w/gw;
-  result.gy = atlas.h/gh;
-  result.chars = str8_copy(arena, chars);
-  result.glyphs = push_array(arena, SR_Canvas, result.chars.size);
-  for (u64 idx = 0; idx < result.chars.size; idx += 1) {
-    s32 x = gw*(idx%result.gx);
-    s32 y = gh*(idx/result.gx);
-    result.glyphs[idx] = sr_canvas_from(atlas, x, y, gw, gh);
+  result.chars = chars;
+  result.glyph_w = glyph_w;
+  result.glyph_h = glyph_h;
+  result.num_glyph_x = atlas.w/glyph_w;
+  result.num_glyph_y = atlas.h/glyph_h;
+  result.glyphs = push_array(arena, SR_Canvas, chars->size);
+  for (u64 idx = 0; idx < chars->size; idx += 1) {
+    s32 x = glyph_w*(idx%result.num_glyph_x);
+    s32 y = glyph_h*(idx/result.num_glyph_x);
+    result.glyphs[idx] = sr_canvas_from(atlas, x, y, glyph_w, glyph_h);
   }
   return(result);
 }
 
 internal void
-sr_font_calc_dim(SR_Font font, String8 text, s32 *w, s32 *h) {
-  s32 mx = 0;
-  s32 my = 0;
+sr_font_calc_dim(SR_Font font, String8 text, s32 *out_x, s32 *out_y) {
+  s32 x = 0;
+  s32 y = font.glyph_h;
   s32 dx = 0;
   for (u64 idx = 0; idx < text.size; idx += 1) {
     u8 c = text.str[idx];
     switch (c) {
       case '\n': {
         dx = 0;
-        my += font.gh;
+        y += font.glyph_h;
         continue;
       } break;
       case '\t': {
-        dx += font.gw*2;
+        dx += font.glyph_w*2;
         continue;
       } break;
     }
-    dx += font.gw;
-    if (dx > mx) mx = dx;
+    dx += font.glyph_w;
+    if (dx > x) x = dx;
   }
-  if (w) *w = mx;
-  if (h) *h = my;
+  if (out_x) *out_x = x;
+  if (out_y) *out_y = y;
 }
 
 internal void
@@ -214,50 +214,40 @@ internal void
 sr_img(SR_Canvas canvas,
        s32 x0, s32 y0, s32 x1, s32 y1,
        s32 u0, s32 v0, s32 u1, s32 v1,
-       SR_Canvas image, u32 color) {
+       SR_Canvas img, u32 color) {
   if (x0 > x1) swap_t(s32, x0, x1);
   if (y0 > y1) swap_t(s32, y0, y1);
-  s32 min_x = x0;
-  s32 min_y = y0;
-  s32 max_x = x1;
-  s32 max_y = y1;
-  s32 dst_w = max_x - min_x;
-  s32 dst_h = max_y - min_y;
-  s32 min_u = max(u0, 0);
-  s32 min_v = max(v0, 0);
-  s32 max_u = min(u1, image.w);
-  s32 max_v = min(v1, image.h);
-  s32 src_w = max_u - min_u;
-  s32 src_h = max_v - min_v;
-  if (min_x < 0) min_x = 0;
-  if (min_y < 0) min_y = 0;
-  if (max_x > canvas.w) max_x = canvas.w;
-  if (max_y > canvas.h) max_y = canvas.h;
-  u32 *src_row = image.data  + min_v*image.pitch  + min_u;
-  u32 *dst_row = canvas.data + min_y*canvas.pitch + min_x;
-  f32 mw = 1.0f/dst_w;
-  f32 mh = 1.0f/dst_h;
-  for (s32 y = min_y; y < max_y; y += 1) {
-    s32 src_v = (s32)((y - min_y)*mh*src_h);
-    u32 *src_pixel = src_row + src_v*image.pitch;
-    u32 *dst_pixel = dst_row;
-    for (s32 x = min_x; x < max_x; x += 1) {
-      s32 src_u = (s32)((x - min_x)*mw*src_w);
-      u32 src_color = *(src_pixel + src_u);
-      if (src_color != 0xffff00ff) {
-        *dst_pixel = bgra32_mul(src_color, color);
+  s32 dw = x1 - x0;
+  s32 dh = y1 - y0;
+  s32 sw = u1 - u0;
+  s32 sh = v1 - v0;
+  f32 mw = (1.0f/dw)*sw;
+  f32 mh = (1.0f/dh)*sh;
+  if (x0 < 0) x0 = 0;
+  if (y0 < 0) y0 = 0;
+  if (x1 > canvas.w - 1) x1 = canvas.w - 1;
+  if (y1 > canvas.h - 1) y1 = canvas.h - 1;
+  if (u0 < 0) u0 = 0;
+  if (v0 < 0) v0 = 0;
+  if (u1 > img.w - 1) u1 = img.w - 1;
+  if (v1 > img.h - 1) v1 = img.h - 1;
+  for (s32 y = y0; y <= y1; y += 1) {
+    s32 v = (s32)((y - y0)*mh) + v0;
+    for (s32 x = x0; x <= x1; x += 1) {
+      s32 u = (s32)((x - x0)*mw) + u0;
+      u32 c = img.data[v*img.pitch + u];
+      if (c != 0xffff00ff) {
+        canvas.data[y*canvas.pitch + x] = bgra32_mul(c, color);
       }
-      dst_pixel += 1;
     }
-    dst_row += canvas.pitch;
   }
 }
 
 internal void
 sr_char(SR_Canvas canvas, s32 x, s32 y, char c, SR_Font font, u32 color) {
-  u64 idx = str8_find_needle(font.chars, str8_make((u8 *)(&c), 1), 0);
-  SR_Canvas g = font.glyphs[idx];
-  sr_img(canvas, x, y, x+g.w, y+g.h, 0, 0, g.w, g.h, g, color);
+  u64 idx = str8_find_needle(*font.chars, str8_make((u8 *)(&c), 1), 0);
+  SR_Canvas glyph = font.glyphs[idx];
+  sr_img(canvas, x, y, x+glyph.w-1, y+glyph.h-1, 0, 0, glyph.w-1, glyph.h-1, glyph, color);
 }
 
 internal void
@@ -269,15 +259,15 @@ sr_text(SR_Canvas canvas, s32 x, s32 y, String8 text, SR_Font font, u32 color) {
     switch (c) {
       case '\n': {
         xx = x;
-        yy += font.gh;
+        yy += font.glyph_h;
         continue;
       } break;
       case '\t': {
-        xx += font.gw*2;
+        xx += font.glyph_w*2;
         continue;
       } break;
     }
     sr_char(canvas, xx, yy, c, font, color);
-    xx += font.gw;
+    xx += font.glyph_w;
   }
 }

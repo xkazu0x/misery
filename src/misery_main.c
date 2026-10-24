@@ -112,8 +112,11 @@ struct Ray {
   b32 hit_is_vert;
   f32 hit_x;
   f32 hit_y;
-  f32 len;
-  f32 ang;
+  f32 hit_len;
+  u32 map_idx;
+  f32 angle;
+  b32 face_x;
+  b32 face_y;
 };
 
 typedef struct M_State M_State;
@@ -290,114 +293,137 @@ get_world_map_idx(s32 x, s32 y) {
   return(result);
 }
 
+internal u32
+get_world_map_idx_from_pos(f32 x, f32 y) {
+  s32 tile_x = (s32)floor_f32(x/TILE_SIZE);
+  s32 tile_y = (s32)floor_f32(y/TILE_SIZE);
+  u32 result = get_world_map_idx(tile_x, tile_y);
+  return(result);
+}
+
 internal Ray
 ray_cast(f32 ray_x, f32 ray_y, f32 angle) {
-  Ray result = {0};
-
   f32 intercept_x, intercept_y;
   f32 step_x, step_y;
+  Ray result = {0};
 
+  // NOTE: keep rangle between 0 <-> 2*pi
   f32 ray_angle = mod_f32(angle, tau32);
   if (ray_angle < 0.0f) ray_angle += tau32;
 
-  b32 ray_is_facing_down  = (ray_angle > 0.0f      && ray_angle < pi32);
-  b32 ray_is_facing_right = (ray_angle > pi32*1.5f || ray_angle < pi32*0.5f);
-  b32 ray_is_facing_up    = !ray_is_facing_down;
-  b32 ray_is_facing_left  = !ray_is_facing_right;
+  // NOTE: find ray facing direction
+  b32 face_y = (ray_angle > 0.0f      && ray_angle < pi32);
+  b32 face_x = (ray_angle > pi32*1.5f || ray_angle < pi32*0.5f);
 
-  // NOTE: vertical intersection
+  //////////////////////////////////
+  // NOTE: VERTICAL INTERSECTION
+
   b32 vert_hit = 0;
   f32 vert_hit_x = 0;
   f32 vert_hit_y = 0;
+  u32 vert_map_idx = 0;
   {
     intercept_y = floor_f32(ray_y/TILE_SIZE)*TILE_SIZE;
-    intercept_y += (ray_is_facing_down) ? TILE_SIZE : 0;
+    intercept_y += (face_y) ? TILE_SIZE : 0;
     intercept_x = ray_x + (intercept_y - ray_y)/tan_f32(ray_angle);
 
     step_y = TILE_SIZE;
-    step_y *= (ray_is_facing_up) ? -1.0f : 1.0f;
+    step_y *= (!face_y) ? -1.0f : 1.0f;
 
     step_x = TILE_SIZE/tan_f32(ray_angle);
-    step_x *= (ray_is_facing_left  && step_x > 0.0f) ? -1.0f : 1.0f;
-    step_x *= (ray_is_facing_right && step_x < 0.0f) ? -1.0f : 1.0f;
+    step_x *= (!face_x && step_x > 0.0f) ? -1.0f : 1.0f;
+    step_x *= ( face_x && step_x < 0.0f) ? -1.0f : 1.0f;
 
     f32 dx = intercept_x;
     f32 dy = intercept_y;
 
     while (dx >= 0 && dx <= MAP_REAL_W && dy >= 0 && dy <= MAP_REAL_H) {
-      f32 tile_x = dx;
-      f32 tile_y = dy;
-      if (ray_is_facing_up) tile_y -= 1.0f;
-      tile_x = floor_f32(tile_x/TILE_SIZE);
-      tile_y = floor_f32(tile_y/TILE_SIZE);
-      if (get_world_map_idx(tile_x, tile_y) == 1) {
+      f32 x = dx;
+      f32 y = dy;
+      if (!face_y) y -= 1.0f;
+      u32 map_idx = get_world_map_idx_from_pos(x, y);
+      if (map_idx == 1) {
         vert_hit = 1;
         vert_hit_x = dx;
         vert_hit_y = dy;
+        vert_map_idx = map_idx;
         break;
       } else {
         dx += step_x;
         dy += step_y;
       }
     }
-  } // NOTE: vertical intersection
+  } // NOTE: VERTICAL INTERSECTION
 
-  // NOTE: horizontal intersection
+  ////////////////////////////////////
+  // NOTE: HORIZONTAL INTERSECTION
+
   b32 horz_hit = 0;
   f32 horz_hit_x = 0;
   f32 horz_hit_y = 0;
+  u32 horz_map_idx = 0;
   {
     intercept_x = floor_f32(ray_x/TILE_SIZE)*TILE_SIZE;
-    intercept_x += (ray_is_facing_right) ? TILE_SIZE : 0;
+    intercept_x += (face_x) ? TILE_SIZE : 0;
     intercept_y = ray_y + (intercept_x - ray_x)*tan_f32(ray_angle);
 
     step_x = TILE_SIZE;
-    step_x *= (ray_is_facing_left) ? -1.0f : 1.0f;
+    step_x *= (!face_x) ? -1.0f : 1.0f;
 
     step_y = TILE_SIZE*tan_f32(ray_angle);
-    step_y *= (ray_is_facing_up   && step_y > 0.0f) ? -1.0f : 1.0f;
-    step_y *= (ray_is_facing_down && step_y < 0.0f) ? -1.0f : 1.0f;
+    step_y *= (!face_y && step_y > 0.0f) ? -1.0f : 1.0f;
+    step_y *= ( face_y && step_y < 0.0f) ? -1.0f : 1.0f;
 
     f32 dx = intercept_x;
     f32 dy = intercept_y;
 
     while (dx >= 0 && dx <= MAP_REAL_W && dy >= 0 && dy <= MAP_REAL_H) {
-      f32 tile_x = dx;
-      f32 tile_y = dy;
-      if (ray_is_facing_left) tile_x -= 1;
-      tile_x = floor_f32(tile_x/TILE_SIZE);
-      tile_y = floor_f32(tile_y/TILE_SIZE);
-      if (get_world_map_idx(tile_x, tile_y) == 1) {
+      f32 x = dx;
+      f32 y = dy;
+      if (!face_x) x -= 1;
+      u32 map_idx = get_world_map_idx_from_pos(x, y);
+      if (map_idx == 1) {
         horz_hit = 1;
         horz_hit_x = dx;
         horz_hit_y = dy;
+        horz_map_idx = map_idx;
         break;
       } else {
         dx += step_x;
         dy += step_y;
       }
     }
-  } // NOTE: horizontal intersection
+  } // NOTE: HORIZONTAL INTERSECTION
 
   if (vert_hit || horz_hit) {
     f32 vert_hit_len = max_f32;
     f32 horz_hit_len = max_f32;
 
-    if (vert_hit) vert_hit_len = sqrt_f32(pow2(vert_hit_x - ray_x) + pow2(vert_hit_y - ray_y));
-    if (horz_hit) horz_hit_len = sqrt_f32(pow2(horz_hit_x - ray_x) + pow2(horz_hit_y - ray_y));
+    // NOTE: calculate hit distance
+    if (vert_hit) {
+      vert_hit_len = sqrt_f32(pow2(vert_hit_x - ray_x) + pow2(vert_hit_y - ray_y));
+    }
+    if (horz_hit) {
+      horz_hit_len = sqrt_f32(pow2(horz_hit_x - ray_x) + pow2(horz_hit_y - ray_y));
+    }
 
+    // NOTE: fill ray
     result.hit = 1;
     result.hit_is_vert = (vert_hit_len < horz_hit_len);
     if (result.hit_is_vert) {
       result.hit_x = vert_hit_x;
       result.hit_y = vert_hit_y;
-      result.len   = vert_hit_len;
+      result.hit_len = vert_hit_len;
+      result.map_idx = vert_map_idx;
     } else {
       result.hit_x = horz_hit_x;
       result.hit_y = horz_hit_y;
-      result.len   = horz_hit_len;
+      result.hit_len = horz_hit_len;
+      result.map_idx = horz_map_idx;
     }
-    result.ang = ray_angle;
+    result.angle = ray_angle;
+    result.face_x = face_x;
+    result.face_y = face_y;
   }
 
   return(result);
@@ -453,10 +479,8 @@ draw_2d(SR_Canvas canvas) {
       if (ray.hit) {
         f32 hit_x = ray.hit_x;
         f32 hit_y = ray.hit_y;
-        b32 is_facing_down  = (ray.ang > 0.0f      && ray.ang < pi32);
-        b32 is_facing_right = (ray.ang > pi32*1.5f || ray.ang < pi32*0.5f);
-        if (is_facing_down)  hit_y -= 1;
-        if (is_facing_right) hit_x -= 1;
+        if (ray.face_y) hit_y -= 1;
+        if (ray.face_x) hit_x -= 1;
         s32 x0 = ray_x*MAP_MINI_SCALE;
         s32 y0 = ray_y*MAP_MINI_SCALE;
         s32 x1 = hit_x*MAP_MINI_SCALE;
@@ -494,11 +518,15 @@ draw_3d(SR_Canvas canvas) {
     for (u32 idx = 0; idx < m_state->ray_count; idx += 1) {
       Ray ray = m_state->rays[idx];
       if (ray.hit) {
-        f32 len = cos_f32(ray.ang - m_state->dir_angle)*ray.len;
+        f32 len = cos_f32(ray.angle - m_state->dir_angle)*ray.hit_len;
         f32 h = (TILE_SIZE/len)*plane_d;
         f32 y = (SCREEN_H - h)/2;
-        u32 color = C_DARK_GREEN;
-        if (ray.hit_is_vert) color = C_GREEN;
+        u32 color = 0;
+        if (ray.hit_is_vert) {
+          color = (ray.face_y) ? C_RED : C_YELLOW;
+        } else {
+          color = (ray.face_x) ? C_GREEN : C_ORANGE;
+        }
         sr_linev(canvas, idx, y, y+h-1, color);
       }
     }
@@ -536,16 +564,16 @@ frame(void) {
     if (key_down(WM_Key_RIGHT)) m_state->dir_delta = 1.0f;
 
     m_state->dir_angle += m_state->dir_delta*m_state->dir_speed*dt;
+
     f32 dir_x = cos_f32(m_state->dir_angle);
     f32 dir_y = sin_f32(m_state->dir_angle);
 
     f32 mov_step = m_state->mov_delta*m_state->mov_speed*dt;
+
     f32 new_pos_x = m_state->pos_x + dir_x*mov_step;
     f32 new_pos_y = m_state->pos_y + dir_y*mov_step;
 
-    s32 tile_x = floor_f32(new_pos_x/TILE_SIZE);
-    s32 tile_y = floor_f32(new_pos_y/TILE_SIZE);
-    if (get_world_map_idx(tile_x, tile_y) != 1) {
+    if (get_world_map_idx_from_pos(new_pos_x, new_pos_y) != 1) {
       m_state->pos_x = new_pos_x;
       m_state->pos_y = new_pos_y;
     }
@@ -560,12 +588,11 @@ frame(void) {
       f32 ray_x = m_state->pos_x;
       f32 ray_y = m_state->pos_y;
 
-      f32 ray_angle_t    = m_state->dir_angle - fov_angle*0.5f;
+      f32 ray_angle = m_state->dir_angle - fov_angle*0.5f;
       f32 ray_angle_step = fov_angle/ray_count;
 
-      for (u32 idx = 0; idx < ray_count; idx += 1) {
-        m_state->rays[idx] = ray_cast(ray_x, ray_y, ray_angle_t);
-        ray_angle_t += ray_angle_step;
+      for (u32 idx = 0; idx < ray_count; idx += 1, ray_angle += ray_angle_step) {
+        m_state->rays[idx] = ray_cast(ray_x, ray_y, ray_angle);
       }
     }
   }
@@ -584,11 +611,12 @@ frame(void) {
       Temp scratch = scratch_begin(0, 0);
       f32 ms_per_frame = m_state->us_per_frame/thousand(1.0f);
       f32 frames_per_sec = 1.0f/(m_state->us_per_frame/million(1.0f));
-      String8 text = str8f(scratch.arena, "%.2f\n%.2f", frames_per_sec, ms_per_frame);
+      String8 text = str8f(scratch.arena, "%.2ffps\n%.2fms", frames_per_sec, ms_per_frame);
       s32 w, h;
       sr_font_calc_dim(m_state->font, text, &w, &h);
       s32 x = canvas.w - w - 1;
       s32 y = 0;
+      sr_rectf(canvas, x, y, x+w, y+h, C_BLACK);
       sr_text(canvas, x, y, text, m_state->font, C_LAVENDER);
       scratch_end(scratch);
     }
@@ -613,11 +641,6 @@ frame(void) {
   m_state->us_per_frame = m_state->time_end - m_state->time_start;
   m_state->time_start = m_state->time_end;
 
-  // f32 ms_per_frame = m_state->us_per_frame/thousand(1.0f);
-  // f32 frame_per_sec = 1.0f/(us_per_frame/million(1.0f));
-  // printf("fps: %.2f, ms: %.2f\n", frame_per_sec, ms_per_frame);
-
-  // NOTE: flip
   r_end();
   memory_copy_array(m_state->prev_key_state, m_state->curr_key_state);
   arena_clear(m_state->frame_arena);
@@ -645,13 +668,8 @@ entry_point(int argc, char **argv) {
 
   IMG_Info img = img_load(m_state->arena, s("pico8_font.bmp"));
   SR_Canvas atlas = sr_canvas_make(img.data, img.w, img.h, img.w);
-  String8 chars = s(" !\"#$%&'()*+,-./"
-                    "0123456789:;<=>?"
-                    "@ABCDEFGHIJKLMNO"
-                    "PQRSTUVWXYZ[\\]^_"
-                    "`abcdefghijklmno"
-                    "pqrstuvwxyz{|}~ ");
-  m_state->font = sr_font_make(m_state->arena, atlas, 4, 6, chars);
+  String8 chars = str8_copy(m_state->arena, s(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "));
+  m_state->font = sr_font_make(m_state->arena, atlas, 4, 6, &chars);
 
   s32 canvas_w = SCREEN_W + MAP_MINI_W;
   s32 canvas_h = max(SCREEN_H, MAP_MINI_H);
@@ -684,3 +702,6 @@ entry_point(int argc, char **argv) {
 
   for (;!frame(););
 }
+
+// TODO:
+// - better collision

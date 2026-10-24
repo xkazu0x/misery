@@ -3,18 +3,19 @@
 
 typedef struct SR_Canvas SR_Canvas;
 struct SR_Canvas {
-  u32 *data;
-  s32 w;
-  s32 h;
+  s32 w, h;
   s32 pitch;
+  u32 *data;
 };
 
 typedef struct SR_Font SR_Font;
 struct SR_Font {
   SR_Canvas atlas;
-  s32 gw, gh;
-  s32 gx, gy;
-  String8 chars;
+  String8 *chars;
+  s32 glyph_w;
+  s32 glyph_h;
+  s32 num_glyph_x;
+  s32 num_glyph_y;
   SR_Canvas *glyphs;
 };
 
@@ -22,8 +23,8 @@ internal SR_Canvas sr_canvas_zero(void);
 internal SR_Canvas sr_canvas_make(u32 *data, s32 w, s32 h, s32 pitch);
 internal SR_Canvas sr_canvas_from(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h);
 
-internal SR_Font sr_font_make(Arena *arena, SR_Canvas atlas, s32 gw, s32 gh, String8 chars);
-internal void sr_font_calc_dim(SR_Font font, String8 text, s32 *w, s32 *h);
+internal SR_Font sr_font_make(Arena *arena, SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 *chars);
+internal void    sr_font_calc_dim(SR_Font font, String8 text, s32 *out_x, s32 *out_y);
 
 internal void sr_fill(SR_Canvas canvas, u32 color);
 internal void sr_pixel(SR_Canvas canvas, s32 x, s32 y, u32 color);

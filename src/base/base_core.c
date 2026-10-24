@@ -86,20 +86,21 @@ clz64(u64 mask) {
 
 internal u64
 bit_size_from_arch(Arch arch) {
-  u64 arch_bitsize = 0;
+  u64 result = 0;
   switch (arch) {
-    case Arch_X64:   arch_bitsize = 64; break;
-    case Arch_X86:   arch_bitsize = 32; break;
-    case Arch_ARM64: arch_bitsize = 64; break;
-    case Arch_ARM32: arch_bitsize = 32; break;
+    case Arch_X64:   result = 64; break;
+    case Arch_X86:   result = 32; break;
+    case Arch_ARM64: result = 64; break;
+    case Arch_ARM32: result = 32; break;
     default: break;
   }
-  return(arch_bitsize);
+  return(result);
 }
 
 internal u64
 byte_size_from_arch(Arch arch) {
-  return(bit_size_from_arch(arch)/8);
+  u64 result = bit_size_from_arch(arch)/8;
+  return(result);
 }
 
 ////////////////////////////////
@@ -139,7 +140,6 @@ date_time_from_dense_time(Dense_Time time){
   time /= 31;
   result.mon  = time%12;
   time /= 12;
-  assert(time <= max_u32);
-  result.year = (u32)time;
+  result.year = safe_cast_u32(time);
   return(result);
 }
