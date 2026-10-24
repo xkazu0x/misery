@@ -270,7 +270,7 @@ wm_init(void) {
 
   Bool supported = 0;
   if (!XkbSetDetectableAutoRepeat(lnx_wm_state->display, True, &supported) || !supported) {
-    printf("[FATAL]: XkbSetDetectableAutoRepeat is not supported.");
+    sh_message(1, str8_lit("Fatal Error"), str8_lit("XkbSetDetectableAutoRepeat is not supported"));
     abort_self(1);
   }
 

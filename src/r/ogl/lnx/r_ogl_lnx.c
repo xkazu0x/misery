@@ -14,7 +14,7 @@ r_ogl_os_init(void) {
   if (!glXQueryVersion(lnx_wm_state->display, &glx_version_major, &glx_version_minor) || (glx_version_major == 1 && glx_version_minor < 3) || glx_version_major < 1) {
     Temp scratch = scratch_begin(0, 0);
     String8 message = str8f(scratch.arena, "Unsupported GLX version (%i.%i, need at least 1.3)", glx_version_major, glx_version_minor);
-    fprintf(stderr, "[FATAL] %.*s\n", str8_varg(message));
+    sh_message(1, str8_lit("Fatal Error"), message);
     abort_self(1);
     scratch_end(scratch);
   }
@@ -37,7 +37,7 @@ r_ogl_os_init(void) {
   int fb_cfg_count = 0;
   GLXFBConfig *fb_cfgs = glXChooseFBConfig(lnx_wm_state->display, DefaultScreen(lnx_wm_state->display), fb_cfg_attrs, &fb_cfg_count);
   if (fb_cfgs == 0) {
-    fprintf(stderr, "[FATAL] %.*s\n", str8_varg(str8_lit("Count not find a suitable framebuffer configuration.")));
+    sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not find a suitable framebuffer configuration."));
     abort_self(1);
   }
 
@@ -48,7 +48,7 @@ r_ogl_os_init(void) {
   {
     XVisualInfo *vi = glXGetVisualFromFBConfig(lnx_wm_state->display, fb_cfg);
     if (vi == 0) {
-      fprintf(stderr, "[FATAL] %.*s\n", str8_varg(str8_lit("Count not get visual from GLX framebuffer config.")));
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not get visual from GLX framebuffer config."));
       abort_self(1);
     }
     lnx_wm_state->window_visual = vi->visual;
