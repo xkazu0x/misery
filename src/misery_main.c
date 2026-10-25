@@ -14,6 +14,11 @@
 #include "img/img.c"
 #include "sr/sr.c"
 
+#if OS_WINDOWS
+# include <timeapi.h>
+# pragma comment(lib, "winmm")
+#endif
+
 #define C_BLACK                 0x000000
 #define C_DARK_BLUE             0x1D2B53
 #define C_DARK_PURPLE           0x7E2553
@@ -669,6 +674,10 @@ frame(void) {
 
 internal void
 entry_point(int argc, char **argv) {
+#if OS_WINDOWS
+  timeBeginPeriod(1);
+#endif
+
   Arena *arena = arena_alloc();
   m_state = push_array(arena, M_State, 1);
   m_state->arena = arena;
@@ -735,6 +744,10 @@ entry_point(int argc, char **argv) {
   wm_window_first_paint(m_state->window);
 
   for (;!frame(););
+
+#if OS_WINDOWS
+  timeEndPeriod(1);
+#endif
 }
 
 // TODO:

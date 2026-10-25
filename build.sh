@@ -47,6 +47,6 @@ cd ..
 
 # --- Warn On No Builds -------------------------------------------------------
 if [[ "${did_build:-0}" == "0" ]]; then
-  echo "[WARN] no valid build target specified."
+  echo "[WARNING] no valid build target specified."
   exit 1
 fi

@@ -134,7 +134,7 @@ img_data_from_file_path(Arena *arena, String8 path) {
   IMG_Data result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   String8 path_copy = str8_copy(scratch.arena, path);
-  String8 file_data = data_from_file_path(scratch.arena, path);
+  String8 file_data = data_from_file_path(scratch.arena, path_copy);
   if (file_data.size > 0) {
     IMG__Context ctx = img__ctx_make(file_data);
     if (!img__bmp_test(&ctx)) invalid_path;
