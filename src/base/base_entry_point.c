@@ -3,7 +3,7 @@
 
 internal void
 main_thread_base_entry_point(int argc, char **argv) {
-  // NOTE: initialize all included layers
+  // NOTE: init all included layers
 #if defined(WM_H) && !defined(WM_INIT_MANUAL)
   wm_init();
 #endif

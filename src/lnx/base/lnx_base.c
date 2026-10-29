@@ -589,7 +589,7 @@ main(int argc, char **argv) {
     }
 
     // NOTE: setup thread context
-    TCTX *tctx = tctx_alloc();
+    Thread_Context *tctx = tctx_alloc();
     tctx_select(tctx);
 
     // NOTE: setup dynamically allocated state

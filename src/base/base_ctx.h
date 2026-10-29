@@ -1,12 +1,12 @@
-#ifndef BASE_CTXC_H
-#define BASE_CTXC_H
+#ifndef BASE_CTX_H
+#define BASE_CTX_H
 
 ////////////////////////////////
 // NOTE: Clang OS/Arch Cracking
 
 #if defined(__clang__)
 
-# define CC_CLANG 1
+# define COMPILER_CLANG 1
 
 # if defined(_WIN32)
 #  define OS_WINDOWS 1
@@ -35,26 +35,26 @@
 
 #elif defined(_MSC_VER)
 
-# define CC_MSVC 1
+# define COMPILER_MSVC 1
 
 # if _MSC_VER >= 1920
-#  define CC_MSVC_YEAR 2019
+#  define COMPILER_MSVC_YEAR 2019
 # elif _MSC_VER >= 1910
-#  define CC_MSVC_YEAR 2017
+#  define COMPILER_MSVC_YEAR 2017
 # elif _MSC_VER >= 1900
-#  define CC_MSVC_YEAR 2015
+#  define COMPILER_MSVC_YEAR 2015
 # elif _MSC_VER >= 1800
-#  define CC_MSVC_YEAR 2013
+#  define COMPILER_MSVC_YEAR 2013
 # elif _MSC_VER >= 1700
-#  define CC_MSVC_YEAR 2012
+#  define COMPILER_MSVC_YEAR 2012
 # elif _MSC_VER >= 1600
-#  define CC_MSVC_YEAR 2010
+#  define COMPILER_MSVC_YEAR 2010
 # elif _MSC_VER >= 1500
-#  define CC_MSVC_YEAR 2008
+#  define COMPILER_MSVC_YEAR 2008
 # elif _MSC_VER >= 1400
-#  define CC_MSVC_YEAR 2005
+#  define COMPILER_MSVC_YEAR 2005
 # else
-#  define CC_MSVC_YEAR 0
+#  define COMPILER_MSVC_YEAR 0
 # endif
 
 # if defined(_WIN32)
@@ -80,7 +80,7 @@
 
 #elif defined(__GNUC__) || defined(__GNUG__)
 
-# define CC_GCC 1
+# define COMPILER_GCC 1
 
 # if defined(_WIN32)
 #  define OS_WINDOWS 1
@@ -137,14 +137,14 @@
 ////////////////////////////////
 // NOTE: Zero All Undefined Options
 
-#if !defined(CC_CLANG)
-# define CC_CLANG 0
+#if !defined(COMPILER_CLANG)
+# define COMPILER_CLANG 0
 #endif
-#if !defined(CC_MSVC)
-# define CC_MSVC 0
+#if !defined(COMPILER_MSVC)
+# define COMPILER_MSVC 0
 #endif
-#if !defined(CC_GCC)
-# define CC_GCC 0
+#if !defined(COMPILER_GCC)
+# define COMPILER_GCC 0
 #endif
 #if !defined(OS_WINDOWS)
 # define OS_WINDOWS 0
@@ -184,4 +184,4 @@
 # error You tried to build with an unsupported architecture. Currently, only building in x64 mode is supported.
 #endif
 
-#endif // BASE_CTXC_H
+#endif // BASE_CTX_H

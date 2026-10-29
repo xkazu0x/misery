@@ -205,7 +205,9 @@ internal void rgba8_from_bgra32(u32 hex, u8 *r, u8 *g, u8 *b, u8 *a);
 internal u32 bgra32_from_rgba4(Vector4 v);
 internal Vector4 rgba4_from_bgra32(u32 hex);
 
-internal u32 bgra32_mul4(u32 hex, Vector4 v);
-internal u32 bgra32_mul(u32 hex, u32 v);
+internal u32 bgra32_mul(u32 hex, Vector4 v);
+internal u32 bgra32_muls(u32 hex, f32 s);
+internal u32 bgra32_muls_rgb(u32 hex, f32 s);
+internal u32 bgra32_mul32(u32 hex, u32 hex0);
 
 #endif // BASE_MATH_H

@@ -15,7 +15,7 @@ sr_canvas_make(u32 *data, s32 w, s32 h, s32 pitch) {
 }
 
 internal SR_Canvas
-sr_canvas_from(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h) {
+sr_canvas_clip(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h) {
   if (x < 0) x = 0;
   if (y < 0) y = 0;
   if (x > canvas.w) x = canvas.w;
@@ -46,13 +46,13 @@ sr_font_make(Arena *arena, SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 *c
   for (u64 idx = 0; idx < chars->size; idx += 1) {
     s32 x = glyph_w*(idx%result.num_glyph_x);
     s32 y = glyph_h*(idx/result.num_glyph_x);
-    result.glyphs[idx] = sr_canvas_from(atlas, x, y, glyph_w, glyph_h);
+    result.glyphs[idx] = sr_canvas_clip(atlas, x, y, glyph_w, glyph_h);
   }
   return(result);
 }
 
 internal Vector2
-sr_font_calc_text_size(SR_Font font, String8 text) {
+sr_font_text_size(SR_Font font, String8 text) {
   Vector2 result = vector2_make(0, font.glyph_h);
   s32 dx = 0;
   for (u64 idx = 0; idx < text.size; idx += 1) {
@@ -74,6 +74,22 @@ sr_font_calc_text_size(SR_Font font, String8 text) {
   return(result);
 }
 
+internal u32
+sr_pget(SR_Canvas canvas, s32 x, s32 y) {
+  u32 result = 0;
+  if (x >= 0 && x < canvas.w && y >= 0 && y < canvas.h) {
+    result = canvas.data[y*canvas.pitch + x];
+  }
+  return(result);
+}
+
+internal void
+sr_pset(SR_Canvas canvas, s32 x, s32 y, u32 color) {
+  if (x >= 0 && x < canvas.w && y >= 0 && y < canvas.h) {
+    canvas.data[y*canvas.pitch + x] = color;
+  }
+}
+
 internal void
 sr_fill(SR_Canvas canvas, u32 color) {
   for (s32 y = 0; y < canvas.h; y += 1) {
@@ -84,10 +100,51 @@ sr_fill(SR_Canvas canvas, u32 color) {
 }
 
 internal void
-sr_pixel(SR_Canvas canvas, s32 x, s32 y, u32 color) {
-  if (x >= 0 && x < canvas.w && y >= 0 && y < canvas.h) {
-    canvas.data[y*canvas.pitch + x] = color;
+sr_line(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color) {
+#if 0
+  b32 is_steep = (abs_t(s32, y1 - y0) > abs_t(s32, x1 - x0));
+  if (is_steep) {
+    swap_t(s32, x0, y0);
+    swap_t(s32, x1, y1);
   }
+  if (x0 > x1) {
+    swap_t(s32, x0, x1);
+    swap_t(s32, y0, y1);
+  }
+  s32 dx = x1 - x0;
+  s32 dy = y1 - y0;
+  s32 dir = (dy < 0) ? -1 : 1;
+  dy *= dir;
+  if (dx != 0) {
+    s32 y = y0;
+    s32 d = 2*dy - dx;
+    for (s32 x = x0; x <= x1; x += 1) {
+      if (is_steep) {
+        sr_pset(canvas, y, x, color);
+      } else {
+        sr_pset(canvas, x, y, color);
+      }
+      if (d >= 0) {
+        y += dir;
+        d = d - 2*dx;
+      }
+      d = d + 2*dy;
+    }
+  }
+#else
+  s32 dx = x1 - x0;
+  s32 dy = y1 - y0;
+  s32 len = (abs_t(s32, dx) > abs_t(s32, dy)) ? abs_t(s32, dx) : abs_t(s32, dy);
+  f32 x_inc = dx/(f32)len;
+  f32 y_inc = dy/(f32)len;
+  f32 x = x0;
+  f32 y = y0;
+  for (s32 idx = 0; idx <= len; idx += 1) {
+    sr_pset(canvas, round_t(s32, x), round_t(s32, y), color);
+    x += x_inc;
+    y += y_inc;
+  }
+#endif
 }
 
 internal void
@@ -108,39 +165,6 @@ sr_linev(SR_Canvas canvas, s32 x, s32 y0, s32 y1, u32 color) {
   if (x >= 0 && x < canvas.h) {
     for (s32 y = y0; y <= y1; y += 1) {
       canvas.data[y*canvas.pitch + x] = color;
-    }
-  }
-}
-
-internal void
-sr_line(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color) {
-  b32 is_steep = (abs_t(s32, y1 - y0) > abs_t(s32, x1 - x0));
-  if (is_steep) {
-    swap_t(s32, x0, y0);
-    swap_t(s32, x1, y1);
-  }
-  if (x0 > x1) {
-    swap_t(s32, x0, x1);
-    swap_t(s32, y0, y1);
-  }
-  s32 dx = x1 - x0;
-  s32 dy = y1 - y0;
-  s32 dir = (dy < 0) ? -1 : 1;
-  dy *= dir;
-  if (dx != 0) {
-    s32 y = y0;
-    s32 d = 2*dy - dx;
-    for (s32 x = x0; x <= x1; x += 1) {
-      if (is_steep) {
-        sr_pixel(canvas, y, x, color);
-      } else {
-        sr_pixel(canvas, x, y, color);
-      }
-      if (d >= 0) {
-        y += dir;
-        d = d - 2*dx;
-      }
-      d = d + 2*dy;
     }
   }
 }
@@ -204,14 +228,14 @@ sr_circl(SR_Canvas canvas, s32 cx, s32 cy, s32 r, u32 color) {
     } else {
       p += 2*x + 1;
     }
-    sr_pixel(canvas, cx+x, cy+y, color);
-    sr_pixel(canvas, cx-x, cy+y, color);
-    sr_pixel(canvas, cx+x, cy-y, color);
-    sr_pixel(canvas, cx-x, cy-y, color);
-    sr_pixel(canvas, cx+y, cy+x, color);
-    sr_pixel(canvas, cx-y, cy+x, color);
-    sr_pixel(canvas, cx+y, cy-x, color);
-    sr_pixel(canvas, cx-y, cy-x, color);
+    sr_pset(canvas, cx+x, cy+y, color);
+    sr_pset(canvas, cx-x, cy+y, color);
+    sr_pset(canvas, cx+x, cy-y, color);
+    sr_pset(canvas, cx-x, cy-y, color);
+    sr_pset(canvas, cx+y, cy+x, color);
+    sr_pset(canvas, cx-y, cy+x, color);
+    sr_pset(canvas, cx+y, cy-x, color);
+    sr_pset(canvas, cx-y, cy-x, color);
   }
 }
 
@@ -238,7 +262,7 @@ sr_image(SR_Canvas canvas,
       s32 u = round_t(s32, (x - x0)*xm) + u0;
       u32 c = image.data[v*image.pitch + u];
       if (c != 0xffff00ff) {
-        canvas.data[y*canvas.pitch + x] = bgra32_mul(c, color);
+        canvas.data[y*canvas.pitch + x] = bgra32_mul32(c, color);
       }
     }
   }

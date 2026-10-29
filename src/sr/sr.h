@@ -21,17 +21,18 @@ struct SR_Font {
 
 internal SR_Canvas sr_canvas_zero(void);
 internal SR_Canvas sr_canvas_make(u32 *data, s32 w, s32 h, s32 pitch);
-internal SR_Canvas sr_canvas_from(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h);
+internal SR_Canvas sr_canvas_clip(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h);
 internal SR_Canvas sr_canvas_alloc(Arena *arena, s32 w, s32 h);
 
 internal SR_Font sr_font_make(Arena *arena, SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 *chars);
-internal Vector2 sr_font_calc_text_size(SR_Font font, String8 text);
+internal Vector2 sr_font_text_size(SR_Font font, String8 text);
 
+internal u32  sr_pget(SR_Canvas canvas, s32 x, s32 y);
+internal void sr_sset(SR_Canvas canvas, s32 x, s32 y, u32 color);
 internal void sr_fill(SR_Canvas canvas, u32 color);
-internal void sr_pixel(SR_Canvas canvas, s32 x, s32 y, u32 color);
+internal void sr_line(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color);
 internal void sr_lineh(SR_Canvas canvas, s32 y, s32 x0, s32 x1, u32 color);
 internal void sr_linev(SR_Canvas canvas, s32 x, s32 y0, s32 y1, u32 color);
-internal void sr_line(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color);
 internal void sr_rectf(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color);
 internal void sr_rectl(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color);
 internal void sr_circf(SR_Canvas canvas, s32 cx, s32 cy, s32 r, u32 color);

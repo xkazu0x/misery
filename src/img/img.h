@@ -1,34 +1,34 @@
 #ifndef IMG_H
 #define IMG_H
 
-typedef struct IMG__Context IMG__Context;
-struct IMG__Context {
-  String8 stream;
+typedef struct Image_Context Image_Context;
+struct Image_Context {
+  String8 data;
   u8 *ptr, *opl;
 };
 
-typedef struct IMG__BMP_Info IMG__BMP_Info;
-struct IMG__BMP_Info {
+typedef struct Image_Bmp_Info Image_Bmp_Info;
+struct Image_Bmp_Info {
   u32 w, h, bpp;
   u32 off, hsz;
   u32 rm, gm, bm, am;
 };
 
-typedef struct IMG_Data IMG_Data;
-struct IMG_Data {
+typedef struct Image Image;
+struct Image {
   s32 w, h, n;
   void *data;
 };
 
-internal IMG__Context img__ctx_make(String8 stream);
-internal void         img__ctx_rewind(IMG__Context *ctx);
-internal u8           img__ctx_get8(IMG__Context *ctx);
-internal u16          img__ctx_get16_le(IMG__Context *ctx);
-internal u32          img__ctx_get32_le(IMG__Context *ctx);
+internal Image_Context img_ctx_make(String8 stream);
+internal u8            img_ctx_read8(Image_Context *ctx);
+internal u16           img_ctx_read16(Image_Context *ctx);
+internal u32           img_ctx_read32(Image_Context *ctx);
+internal void          img_ctx_rewind(Image_Context *ctx);
 
-internal b32  img__bmp_test(IMG__Context *ctx);
-internal void img__bmp_parse_header(IMG__Context *ctx, IMG__BMP_Info *info);
+internal b32  img_bmp_check_and_rewind(Image_Context *ctx);
+internal void img_bmp_parse_header(Image_Context *ctx, Image_Bmp_Info *info);
 
-internal IMG_Data img_data_from_file_path(Arena *arena, String8 path);
+internal Image img_from_file_path(Arena *arena, String8 path);
 
 #endif // IMG_H

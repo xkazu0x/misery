@@ -731,7 +731,7 @@ rgba4_from_bgra32(u32 hex) {
 }
 
 internal u32
-bgra32_mul4(u32 hex, Vector4 v) {
+bgra32_mul(u32 hex, Vector4 v) {
   u8 r, g, b, a;
   rgba8_from_bgra32(hex, &r, &g, &b, &a);
   u32 result = bgra32_from_rgba8(r*v.x, g*v.y, b*v.z, a*v.w);
@@ -739,7 +739,21 @@ bgra32_mul4(u32 hex, Vector4 v) {
 }
 
 internal u32
-bgra32_mul(u32 hex, u32 v) {
-  u32 result = bgra32_mul4(hex, rgba4_from_bgra32(v));
+bgra32_muls(u32 hex, f32 s) {
+  Vector4 v = vector4_fill(s);
+  u32 result = bgra32_mul(hex, v);
+  return(result);
+}
+
+internal u32
+bgra32_muls_rgb(u32 hex, f32 s) {
+  Vector4 v = vector4_make(s, s, s, 1.0f);
+  u32 result = bgra32_mul(hex, v);
+  return(result);
+}
+
+internal u32
+bgra32_mul32(u32 hex, u32 v) {
+  u32 result = bgra32_mul(hex, rgba4_from_bgra32(v));
   return(result);
 }

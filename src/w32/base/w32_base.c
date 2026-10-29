@@ -635,7 +635,7 @@ w32_entry_point_caller(int argc, WCHAR **wargv) {
   }
 
   // NOTE: set up thread context
-  TCTX *tctx = tctx_alloc();
+  Thread_Context *tctx = tctx_alloc();
   tctx_select(tctx);
 
   // NOTE: set up dynamically-alloc'd state

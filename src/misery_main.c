@@ -1,5 +1,3 @@
-#define WM_INIT_MANUAL
-
 #include "base/base.h"
 #include "sh/sh.h"
 #include "wm/wm.h"
@@ -44,12 +42,12 @@
 #define MAP_NUM_COLS 8
 #define MAP_NUM_ROWS 8
 
-#define MAP_REAL_W MAP_NUM_COLS*TILE_SIZE
-#define MAP_REAL_H MAP_NUM_ROWS*TILE_SIZE
+#define MAP_W MAP_NUM_COLS*TILE_SIZE
+#define MAP_H MAP_NUM_ROWS*TILE_SIZE
 
-#define MAP_MINI_SCALE 1.0f/(TILE_SIZE/8.0f)
-#define MAP_MINI_W MAP_REAL_W*MAP_MINI_SCALE
-#define MAP_MINI_H MAP_REAL_H*MAP_MINI_SCALE
+#define MINI_MAP_SCALE 1.0f/(TILE_SIZE/8.0f)
+#define MINI_MAP_W MAP_W*MINI_MAP_SCALE
+#define MINI_MAP_H MAP_H*MINI_MAP_SCALE
 
 global u32 world_map[MAP_NUM_ROWS][MAP_NUM_COLS] = {
   {1, 1, 1, 1, 1, 1, 1, 1},
@@ -117,24 +115,22 @@ typedef struct Ray Ray;
 struct Ray {
   b32 hit;
   b32 hit_is_vert;
-  f32 hit_x;
-  f32 hit_y;
-  f32 hit_len;
-  u32 map_idx;
   f32 angle;
-  b32 face_x;
-  b32 face_y;
+  f32 x;
+  f32 y;
+  f32 len;
+  u32 map_idx;
 };
 
-#define MAX_NUM_TEXTURES 3
-
-typedef struct M_State M_State;
-struct M_State {
+typedef struct MS_State MS_State;
+struct MS_State {
   Arena *arena;
   Arena *frame_arena;
 
   SR_Font font;
-  SR_Canvas images[MAX_NUM_TEXTURES];
+  u32 image_count;
+  SR_Canvas *images;
+
   SR_Canvas canvas;
   WM_Window window;
 
@@ -167,140 +163,28 @@ struct M_State {
   Ray *rays;
 };
 
-global M_State *m_state = 0;
-
-internal void
-r_init(void) {
-  r_ogl_os_init();
-
-#define X(name, r, p) name = (name##_Proc_Type *)r_ogl_os_load_proc(#name);
-  R_OGL_PROC_XLIST;
-#undef X
-
-  {
-    struct {
-      GLenum type;
-      String8 *src;
-      GLuint out;
-      String8 errors;
-    } stages[] = {
-      {GL_VERTEX_SHADER,   &r_ogl_rect_vshad_src},
-      {GL_FRAGMENT_SHADER, &r_ogl_rect_fshad_src},
-    };
-
-    for_each_element(idx, stages) {
-      stages[idx].out = glCreateShader(stages[idx].type);
-      GLint src_size = (GLint)stages[idx].src->size;
-      glShaderSource(stages[idx].out, 1, (const GLchar **)&stages[idx].src->str, &src_size);
-      glCompileShader(stages[idx].out);
-      GLint info_log_length = 0;
-      GLint status = 0;
-      glGetShaderiv(stages[idx].out, GL_COMPILE_STATUS, &status);
-      glGetShaderiv(stages[idx].out, GL_INFO_LOG_LENGTH, &info_log_length);
-      if (info_log_length != 0) {
-        stages[idx].errors.size = info_log_length;
-        stages[idx].errors.str = push_array(m_state->arena, u8, info_log_length+1);
-        glGetShaderInfoLog(stages[idx].out, info_log_length, 0, (char *)stages[idx].errors.str);
-        sh_message(1, str8_lit("OpenGL: Shader Compilation Error"), stages[idx].errors);
-      }
-    }
-
-    GLuint program = glCreateProgram();
-    for_each_element(idx, stages) {
-      glAttachShader(program, stages[idx].out);
-    }
-
-    glLinkProgram(program);
-    glValidateProgram(program);
-    m_state->shader = program;
-  }
-
-  glGenVertexArrays(1, &m_state->all_purpose_vao);
-
-  glGenBuffers(1, &m_state->scratch_buffer_64kb);
-  glBindBuffer(GL_ARRAY_BUFFER, m_state->scratch_buffer_64kb);
-  glBufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-internal void
-r_end(void) {
-  Vector2 window_size = wm_window_get_size(m_state->window);
-  f32 wnd_w = window_size.x;
-  f32 wnd_h = window_size.y;
-
-  f32 src_w = m_state->canvas.w;
-  f32 src_h = m_state->canvas.h;
-  f32 src_x = 0.0f;
-  f32 src_y = 0.0f;
-
-  f32 ratio_x = floor_f32(wnd_w/src_w);
-  f32 ratio_y = floor_f32(wnd_h/src_h);
-  f32 ratio = (ratio_x < ratio_y) ? ratio_x : ratio_y;
-
-  f32 dst_w = src_w*ratio;
-  f32 dst_h = src_h*ratio;
-  f32 dst_x = (wnd_w - dst_w)/2;
-  f32 dst_y = (wnd_h - dst_h)/2;
-
-  f32 vertices[] = {
-    dst_x, dst_y, dst_x+dst_w, dst_y+dst_h,
-    src_x, src_y, src_w, src_h,
-  };
-
-  r_ogl_os_window_select(m_state->window);
-
-  glViewport(0, 0, (GLsizei)wnd_w, (GLsizei)wnd_h);
-  glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
-
-  glUseProgram(m_state->shader);
-  glBindVertexArray(m_state->all_purpose_vao);
-
-  glBindBuffer(GL_ARRAY_BUFFER, m_state->scratch_buffer_64kb);
-  glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-
-  glEnableVertexAttribArray(0);
-  glEnableVertexAttribArray(1);
-  glVertexAttribDivisor(0, 1);
-  glVertexAttribDivisor(1, 1);
-  glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 8*sizeof(f32), (void *)0);
-  glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 8*sizeof(f32), (void *)(4*sizeof(f32)));
-
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, m_state->canvas_tex);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_state->canvas.w, m_state->canvas.h, 0, GL_BGRA, GL_UNSIGNED_BYTE, m_state->canvas.data);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-  glUniform2f(glGetUniformLocation(m_state->shader, "u_viewport_size_px"), wnd_w, wnd_h);
-
-  glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, 1);
-
-  r_ogl_os_window_swap(m_state->window);
-}
+global MS_State *ms_state = 0;
 
 internal b32
 key_down(WM_Key key) {
-  b32 result = m_state->curr_key_state[key];
+  b32 result = ms_state->curr_key_state[key];
   return(result);
 }
 
 internal b32
 key_pressed(WM_Key key) {
-  b32 result = m_state->curr_key_state[key] && !m_state->prev_key_state[key];
+  b32 result = ms_state->curr_key_state[key] && !ms_state->prev_key_state[key];
   return(result);
 }
 
 internal b32
 key_release(WM_Key key) {
-  b32 result = !m_state->curr_key_state[key] && m_state->prev_key_state[key];
+  b32 result = !ms_state->curr_key_state[key] && ms_state->prev_key_state[key];
   return(result);
 }
 
 internal u32
-get_world_map_idx(s32 x, s32 y) {
+get_map_tile(s32 x, s32 y) {
   u32 result = 0;
   if (x >= 0 && x < MAP_NUM_COLS && y >= 0 && y < MAP_NUM_ROWS) {
     result = world_map[y][x];
@@ -309,10 +193,34 @@ get_world_map_idx(s32 x, s32 y) {
 }
 
 internal u32
-get_world_map_idx_from_pos(f32 x, f32 y) {
-  s32 tile_x = (s32)floor_f32(x/TILE_SIZE);
-  s32 tile_y = (s32)floor_f32(y/TILE_SIZE);
-  u32 result = get_world_map_idx(tile_x, tile_y);
+get_map_tile_from_pos(f32 x, f32 y) {
+  s32 tile_x = floor_f32(x/TILE_SIZE);
+  s32 tile_y = floor_f32(y/TILE_SIZE);
+  u32 result = get_map_tile(tile_x, tile_y);
+  return(result);
+}
+
+internal b32
+is_facing_down(f32 angle) {
+  b32 result = (angle > 0.0f && angle < pi32);
+  return(result);
+}
+
+internal b32
+is_facing_up(f32 angle) {
+  b32 result = !is_facing_down(angle);
+  return(result);
+}
+
+internal b32
+is_facing_right(f32 angle) {
+  b32 result = (angle > pi32*1.5f || angle < pi32*0.5f);
+  return(result);
+}
+
+internal b32
+is_facing_left(f32 angle) {
+  b32 result = !is_facing_right(angle);
   return(result);
 }
 
@@ -326,10 +234,6 @@ ray_cast(f32 ray_x, f32 ray_y, f32 angle) {
   f32 ray_angle = mod_f32(angle, tau32);
   if (ray_angle < 0.0f) ray_angle += tau32;
 
-  // NOTE: find ray facing direction
-  b32 face_y = (ray_angle > 0.0f      && ray_angle < pi32);
-  b32 face_x = (ray_angle > pi32*1.5f || ray_angle < pi32*0.5f);
-
   //////////////////////////////////
   // NOTE: VERTICAL INTERSECTION
 
@@ -339,24 +243,24 @@ ray_cast(f32 ray_x, f32 ray_y, f32 angle) {
   u32 vert_map_idx = 0;
   {
     intercept_y = floor_f32(ray_y/TILE_SIZE)*TILE_SIZE;
-    intercept_y += (face_y) ? TILE_SIZE : 0;
+    intercept_y += (is_facing_down(ray_angle)) ? TILE_SIZE : 0;
     intercept_x = ray_x + (intercept_y - ray_y)/tan_f32(ray_angle);
 
     step_y = TILE_SIZE;
-    step_y *= (!face_y) ? -1.0f : 1.0f;
+    step_y *= (is_facing_up(ray_angle)) ? -1.0f : 1.0f;
 
     step_x = TILE_SIZE/tan_f32(ray_angle);
-    step_x *= (!face_x && step_x > 0.0f) ? -1.0f : 1.0f;
-    step_x *= ( face_x && step_x < 0.0f) ? -1.0f : 1.0f;
+    step_x *= (is_facing_left(ray_angle)  && step_x > 0.0f) ? -1.0f : 1.0f;
+    step_x *= (is_facing_right(ray_angle) && step_x < 0.0f) ? -1.0f : 1.0f;
 
     f32 dx = intercept_x;
     f32 dy = intercept_y;
 
-    while (dx >= 0 && dx <= MAP_REAL_W && dy >= 0 && dy <= MAP_REAL_H) {
+    while (dx >= 0 && dx <= MAP_W && dy >= 0 && dy <= MAP_H) {
       f32 x = dx;
       f32 y = dy;
-      if (!face_y) y -= 1.0f;
-      u32 map_idx = get_world_map_idx_from_pos(x, y);
+      if (is_facing_up(ray_angle)) y -= 1.0f;
+      u32 map_idx = get_map_tile_from_pos(x, y);
       if (map_idx != 0) {
         vert_hit = 1;
         vert_hit_x = dx;
@@ -379,24 +283,24 @@ ray_cast(f32 ray_x, f32 ray_y, f32 angle) {
   u32 horz_map_idx = 0;
   {
     intercept_x = floor_f32(ray_x/TILE_SIZE)*TILE_SIZE;
-    intercept_x += (face_x) ? TILE_SIZE : 0;
+    intercept_x += (is_facing_right(ray_angle)) ? TILE_SIZE : 0;
     intercept_y = ray_y + (intercept_x - ray_x)*tan_f32(ray_angle);
 
     step_x = TILE_SIZE;
-    step_x *= (!face_x) ? -1.0f : 1.0f;
+    step_x *= (is_facing_left(ray_angle)) ? -1.0f : 1.0f;
 
     step_y = TILE_SIZE*tan_f32(ray_angle);
-    step_y *= (!face_y && step_y > 0.0f) ? -1.0f : 1.0f;
-    step_y *= ( face_y && step_y < 0.0f) ? -1.0f : 1.0f;
+    step_y *= (is_facing_up(ray_angle)   && step_y > 0.0f) ? -1.0f : 1.0f;
+    step_y *= (is_facing_down(ray_angle) && step_y < 0.0f) ? -1.0f : 1.0f;
 
     f32 dx = intercept_x;
     f32 dy = intercept_y;
 
-    while (dx >= 0 && dx <= MAP_REAL_W && dy >= 0 && dy <= MAP_REAL_H) {
+    while (dx >= 0 && dx <= MAP_W && dy >= 0 && dy <= MAP_H) {
       f32 x = dx;
       f32 y = dy;
-      if (!face_x) x -= 1;
-      u32 map_idx = get_world_map_idx_from_pos(x, y);
+      if (is_facing_left(ray_angle)) x -= 1;
+      u32 map_idx = get_map_tile_from_pos(x, y);
       if (map_idx != 0) {
         horz_hit = 1;
         horz_hit_x = dx;
@@ -425,20 +329,18 @@ ray_cast(f32 ray_x, f32 ray_y, f32 angle) {
     // NOTE: fill ray
     result.hit = 1;
     result.hit_is_vert = (vert_hit_len < horz_hit_len);
+    result.angle = ray_angle;
     if (result.hit_is_vert) {
-      result.hit_x = vert_hit_x;
-      result.hit_y = vert_hit_y;
-      result.hit_len = vert_hit_len;
+      result.x = vert_hit_x;
+      result.y = vert_hit_y;
+      result.len = vert_hit_len;
       result.map_idx = vert_map_idx;
     } else {
-      result.hit_x = horz_hit_x;
-      result.hit_y = horz_hit_y;
-      result.hit_len = horz_hit_len;
+      result.x = horz_hit_x;
+      result.y = horz_hit_y;
+      result.len = horz_hit_len;
       result.map_idx = horz_map_idx;
     }
-    result.angle = ray_angle;
-    result.face_x = face_x;
-    result.face_y = face_y;
   }
 
   return(result);
@@ -450,14 +352,14 @@ draw_2d(SR_Canvas canvas) {
   {
     s32 x0 = 0;
     s32 y0 = 0;
-    s32 x1 = (MAP_NUM_COLS*TILE_SIZE - 1)*MAP_MINI_SCALE;
-    s32 y1 = (MAP_NUM_ROWS*TILE_SIZE - 1)*MAP_MINI_SCALE;
+    s32 x1 = (MAP_NUM_COLS*TILE_SIZE - 1)*MINI_MAP_SCALE;
+    s32 y1 = (MAP_NUM_ROWS*TILE_SIZE - 1)*MINI_MAP_SCALE;
     u32 color = C_DARK_GREY;
     for (s32 dx = 0; dx < MAP_NUM_COLS; dx += 1) {
-      sr_linev(canvas, dx*TILE_SIZE*MAP_MINI_SCALE, y0, y1, color);
+      sr_linev(canvas, dx*TILE_SIZE*MINI_MAP_SCALE, y0, y1, color);
     }
     for (s32 dy = 0; dy < MAP_NUM_ROWS; dy += 1) {
-      sr_lineh(canvas, dy*TILE_SIZE*MAP_MINI_SCALE, x0, x1, color);
+      sr_lineh(canvas, dy*TILE_SIZE*MINI_MAP_SCALE, x0, x1, color);
     }
   }
 
@@ -465,19 +367,18 @@ draw_2d(SR_Canvas canvas) {
   {
     for (s32 dy = 0; dy < MAP_NUM_ROWS; dy += 1) {
       for (s32 dx = 0; dx < MAP_NUM_COLS; dx += 1) {
-        u32 map_idx = get_world_map_idx(dx, dy);
+        u32 map_idx = get_map_tile(dx, dy);
         if (map_idx != 0) {
-          SR_Canvas image = m_state->images[map_idx - 1];
-          s32 x0 = dx*TILE_SIZE*MAP_MINI_SCALE;
-          s32 y0 = dy*TILE_SIZE*MAP_MINI_SCALE;
-          s32 x1 = x0 + (TILE_SIZE - 1)*MAP_MINI_SCALE;
-          s32 y1 = y0 + (TILE_SIZE - 1)*MAP_MINI_SCALE;
+          SR_Canvas image = ms_state->images[map_idx - 1];
+          s32 x0 = dx*TILE_SIZE*MINI_MAP_SCALE;
+          s32 y0 = dy*TILE_SIZE*MINI_MAP_SCALE;
+          s32 x1 = x0 + (TILE_SIZE - 1)*MINI_MAP_SCALE;
+          s32 y1 = y0 + (TILE_SIZE - 1)*MINI_MAP_SCALE;
           s32 u0 = 0;
           s32 v0 = 0;
           s32 u1 = image.w - 1;
           s32 v1 = image.h - 1;
           sr_image(canvas, x0, y0, x1, y1, u0, v0, u1, v1, image, ~0u);
-          // sr_rectf(canvas, x0, y0, x1, y1, C_DARK_GREEN);
         }
       }
     }
@@ -485,28 +386,28 @@ draw_2d(SR_Canvas canvas) {
 
   // NOTE: pos cell
   {
-    s32 x0 = floor_f32(m_state->pos_x/TILE_SIZE)*TILE_SIZE*MAP_MINI_SCALE;
-    s32 y0 = floor_f32(m_state->pos_y/TILE_SIZE)*TILE_SIZE*MAP_MINI_SCALE;
-    s32 x1 = x0 + (TILE_SIZE - 1)*MAP_MINI_SCALE;
-    s32 y1 = y0 + (TILE_SIZE - 1)*MAP_MINI_SCALE;
+    s32 x0 = floor_f32(ms_state->pos_x/TILE_SIZE)*TILE_SIZE*MINI_MAP_SCALE;
+    s32 y0 = floor_f32(ms_state->pos_y/TILE_SIZE)*TILE_SIZE*MINI_MAP_SCALE;
+    s32 x1 = x0 + (TILE_SIZE - 1)*MINI_MAP_SCALE;
+    s32 y1 = y0 + (TILE_SIZE - 1)*MINI_MAP_SCALE;
     sr_rectf(canvas, x0, y0, x1, y1, C_BLUE);
   }
 
   // NOTE: raycast
   {
-    f32 ray_x = m_state->pos_x;
-    f32 ray_y = m_state->pos_y;
-    for (u32 idx = 0; idx < m_state->ray_count; idx += 1) {
-      Ray ray = m_state->rays[idx];
+    f32 ray_x = ms_state->pos_x;
+    f32 ray_y = ms_state->pos_y;
+    for (u32 idx = 0; idx < ms_state->ray_count; idx += 1) {
+      Ray ray = ms_state->rays[idx];
       if (ray.hit) {
-        f32 hit_x = ray.hit_x;
-        f32 hit_y = ray.hit_y;
-        if (ray.face_y) hit_y -= 1;
-        if (ray.face_x) hit_x -= 1;
-        s32 x0 = ray_x*MAP_MINI_SCALE;
-        s32 y0 = ray_y*MAP_MINI_SCALE;
-        s32 x1 = hit_x*MAP_MINI_SCALE;
-        s32 y1 = hit_y*MAP_MINI_SCALE;
+        f32 hit_x = ray.x;
+        f32 hit_y = ray.y;
+        if (is_facing_down(ray.angle)) hit_y -= 1;
+        if (is_facing_right(ray.angle)) hit_x -= 1;
+        s32 x0 = ray_x*MINI_MAP_SCALE;
+        s32 y0 = ray_y*MINI_MAP_SCALE;
+        s32 x1 = hit_x*MINI_MAP_SCALE;
+        s32 y1 = hit_y*MINI_MAP_SCALE;
         sr_line(canvas, x0, y0, x1, y1, C_YELLOW);
       }
     }
@@ -515,67 +416,47 @@ draw_2d(SR_Canvas canvas) {
   // NOTE: dir
   {
     s32 len = 6;
-    s32 x0 = m_state->pos_x*MAP_MINI_SCALE;
-    s32 y0 = m_state->pos_y*MAP_MINI_SCALE;
-    s32 x1 = x0 + cos_f32(m_state->dir_angle)*len;
-    s32 y1 = y0 + sin_f32(m_state->dir_angle)*len;
+    s32 x0 = ms_state->pos_x*MINI_MAP_SCALE;
+    s32 y0 = ms_state->pos_y*MINI_MAP_SCALE;
+    s32 x1 = x0 + cos_f32(ms_state->dir_angle)*len;
+    s32 y1 = y0 + sin_f32(ms_state->dir_angle)*len;
     sr_line(canvas, x0, y0, x1, y1, C_ORANGE);
   }
 
   // NOTE: pos
   {
-    s32 d = m_state->dim;
-    s32 x = m_state->pos_x*MAP_MINI_SCALE;
-    s32 y = m_state->pos_y*MAP_MINI_SCALE;
+    s32 d = ms_state->dim;
+    s32 x = ms_state->pos_x*MINI_MAP_SCALE;
+    s32 y = ms_state->pos_y*MINI_MAP_SCALE;
     sr_circf(canvas, x, y, d, C_RED);
   }
 }
 
 internal void
 draw_3d(SR_Canvas canvas) {
-  for (u32 idx = 0; idx < m_state->ray_count; idx += 1) {
-    Ray ray = m_state->rays[idx];
+  for (u32 x = 0; x < ms_state->ray_count; x += 1) {
+    Ray ray = ms_state->rays[x];
     if (ray.hit) {
-      f32 perp_dist = cos_f32(ray.angle - m_state->dir_angle)*ray.hit_len;
-      f32 proj_wall_h = (TILE_SIZE/perp_dist)*m_state->proj_plane_dist;
+      f32 perp_dist = cos_f32(ray.angle - ms_state->dir_angle)*ray.len;
+      f32 proj_wall_h = (TILE_SIZE/perp_dist)*ms_state->proj_plane_dist;
+
       s32 y0 = (s32)((SCREEN_H - proj_wall_h)/2.0f);
       s32 y1 = y0 + proj_wall_h-1;
-      s32 x = idx;
 
-      SR_Canvas image = m_state->images[ray.map_idx - 1];
-      s32 hit_axis = (s32)((ray.hit_is_vert) ? ray.hit_x : ray.hit_y);
-      s32 u = hit_axis % image.w;
+      SR_Canvas image = ms_state->images[ray.map_idx - 1];
+      s32 d = (s32)((ray.hit_is_vert) ? ray.x : ray.y);
+      s32 u = d % image.w;
       f32 ym = (1.0f/proj_wall_h)*image.h;
       for (s32 y = y0; y <= y1; y += 1) {
         s32 v = (s32)((y - y0)*ym);
-        u32 color = image.data[v*image.pitch + u];
-        sr_pixel(canvas, x, y, color);
+        u32 color = sr_pget(image, u, v);
+        if (ray.hit_is_vert) {
+          color = bgra32_muls_rgb(color, 0.5f);
+        }
+        sr_pset(canvas, x, y, color);
       }
-
-      // u32 color = 0;
-      // if (ray.hit_is_vert) {
-      //   color = (ray.face_y) ? C_RED : C_YELLOW;
-      // } else {
-      //   color = (ray.face_x) ? C_GREEN : C_ORANGE;
-      // }
-      // sr_linev(canvas, idx, y0, y1, color);
     }
   }
-}
-
-internal void
-draw_time_info(SR_Canvas canvas) {
-  Temp scratch = scratch_begin(0, 0);
-  f32 ms_per_frame = m_state->us_per_frame/thousand(1.0f);
-  f32 frames_per_sec = 1.0f/(m_state->us_per_frame/million(1.0f));
-  SR_Font font = m_state->font;
-  String8 text = str8f(scratch.arena, "%.2ffps\n%.2fms", frames_per_sec, ms_per_frame);
-  Vector2 size = sr_font_calc_text_size(font, text);
-  s32 x = canvas.w - size.x - 1;
-  s32 y = 0;
-  sr_rectf(canvas, x, y, x+size.x, y+size.y, C_BLACK);
-  sr_text(canvas, x, y, text, m_state->font, C_LAVENDER);
-  scratch_end(scratch);
 }
 
 internal b32
@@ -591,82 +472,163 @@ frame(void) {
       } break;
       case WM_Event_Type_PRESS:
       case WM_Event_Type_RELEASE: {
-        m_state->curr_key_state[event->key] = (event->type == WM_Event_Type_PRESS);
+        ms_state->curr_key_state[event->key] = (event->type == WM_Event_Type_PRESS);
       } break;
     }
   }
 
   // NOTE: update
   {
-    f32 dt = m_state->target_sec_per_frame;
+    f32 dt = ms_state->target_sec_per_frame;
 
-    m_state->mov_delta = 0.0f;
-    m_state->dir_delta = 0.0f;
+    // NOTE: player movement
+    {
+      ms_state->mov_delta = 0.0f;
+      ms_state->dir_delta = 0.0f;
 
-    if (key_down(WM_Key_UP))    m_state->mov_delta = 1.0f;
-    if (key_down(WM_Key_DOWN))  m_state->mov_delta =-1.0f;
-    if (key_down(WM_Key_LEFT))  m_state->dir_delta =-1.0f;
-    if (key_down(WM_Key_RIGHT)) m_state->dir_delta = 1.0f;
+      if (key_down(WM_Key_UP))    ms_state->mov_delta = 1.0f;
+      if (key_down(WM_Key_DOWN))  ms_state->mov_delta =-1.0f;
+      if (key_down(WM_Key_LEFT))  ms_state->dir_delta =-1.0f;
+      if (key_down(WM_Key_RIGHT)) ms_state->dir_delta = 1.0f;
 
-    m_state->dir_angle += m_state->dir_delta*m_state->dir_speed*dt;
-    f32 dir_x = cos_f32(m_state->dir_angle);
-    f32 dir_y = sin_f32(m_state->dir_angle);
-    f32 mov_step = m_state->mov_delta*m_state->mov_speed*dt;
-    f32 new_pos_x = m_state->pos_x + dir_x*mov_step;
-    f32 new_pos_y = m_state->pos_y + dir_y*mov_step;
-    if (get_world_map_idx_from_pos(new_pos_x, new_pos_y) == 0) {
-      m_state->pos_x = new_pos_x;
-      m_state->pos_y = new_pos_y;
+      ms_state->dir_angle += ms_state->dir_delta*ms_state->dir_speed*dt;
+
+      f32 dir_x = cos_f32(ms_state->dir_angle);
+      f32 dir_y = sin_f32(ms_state->dir_angle);
+
+      f32 mov_step = ms_state->mov_delta*ms_state->mov_speed*dt;
+
+      f32 new_pos_x = ms_state->pos_x + dir_x*mov_step;
+      f32 new_pos_y = ms_state->pos_y + dir_y*mov_step;
+
+      if (get_map_tile_from_pos(new_pos_x, new_pos_y) == 0) {
+        ms_state->pos_x = new_pos_x;
+        ms_state->pos_y = new_pos_y;
+      }
     }
 
-    // NOTE: raycast
+    // NOTE: cast rays
     {
-      m_state->rays = push_array(m_state->frame_arena, Ray, m_state->ray_count);
-      f32 fov_angle = m_state->fov_angle;
-      u32 ray_count = m_state->ray_count;
-      f32 ray_x = m_state->pos_x;
-      f32 ray_y = m_state->pos_y;
+      ms_state->rays = push_array(ms_state->frame_arena, Ray, ms_state->ray_count);
+      f32 fov_angle = ms_state->fov_angle;
+      u32 ray_count = ms_state->ray_count;
+      f32 ray_x = ms_state->pos_x;
+      f32 ray_y = ms_state->pos_y;
       for (u32 ray_idx = 0; ray_idx < ray_count; ray_idx += 1) {
-        f32 ray_angle = m_state->dir_angle + atan_f32((ray_idx - ray_count/2.0f)/m_state->proj_plane_dist);
-        m_state->rays[ray_idx] = ray_cast(ray_x, ray_y, ray_angle);
+        f32 ray_angle = ms_state->dir_angle + atan_f32((ray_idx - ray_count/2.0f)/ms_state->proj_plane_dist);
+        ms_state->rays[ray_idx] = ray_cast(ray_x, ray_y, ray_angle);
       }
     }
   }
 
   // NOTE: draw
   {
-    SR_Canvas canvas = m_state->canvas;
-    SR_Canvas canvas2d = sr_canvas_from(canvas, 0, 0, MAP_MINI_W, MAP_MINI_H);
-    SR_Canvas canvas3d = sr_canvas_from(canvas, MAP_MINI_W, 0, SCREEN_W, SCREEN_H);
+    SR_Canvas canvas = ms_state->canvas;
+    SR_Canvas clip2d = sr_canvas_clip(canvas, 0, 0, MINI_MAP_W, MINI_MAP_H);
+    SR_Canvas clip3d = sr_canvas_clip(canvas, MINI_MAP_W, 0, SCREEN_W, SCREEN_H);
 
     sr_fill(canvas, C_BLACK);
-    draw_2d(canvas2d);
-    draw_3d(canvas3d);
-    draw_time_info(canvas);
+    draw_2d(clip2d);
+    draw_3d(clip3d);
+
+    // NOTE: draw time info
+    {
+      Temp scratch = scratch_begin(0, 0);
+      f32 ms_per_frame = ms_state->us_per_frame/thousand(1.0f);
+      f32 frames_per_sec = 1.0f/(ms_state->us_per_frame/million(1.0f));
+      SR_Font font = ms_state->font;
+      String8 text = str8f(scratch.arena, "%.2ffps\n%.2fms", frames_per_sec, ms_per_frame);
+      Vector2 size = sr_font_text_size(font, text);
+      s32 x = canvas.w - size.x - 1;
+      s32 y = 0;
+      sr_rectf(canvas, x, y, x+size.x, y+size.y, C_BLACK);
+      sr_text(canvas, x, y, text, ms_state->font, C_LAVENDER);
+      scratch_end(scratch);
+    }
   }
 
-  // NOTE: wait to flip
+  // NOTE: flip
+  {
+    Vector2 window_size = wm_window_get_size(ms_state->window);
+    f32 wnd_w = window_size.x;
+    f32 wnd_h = window_size.y;
+
+    f32 src_w = ms_state->canvas.w;
+    f32 src_h = ms_state->canvas.h;
+    f32 src_x = 0.0f;
+    f32 src_y = 0.0f;
+
+    f32 ratio_x = floor_f32(wnd_w/src_w);
+    f32 ratio_y = floor_f32(wnd_h/src_h);
+    f32 ratio = (ratio_x < ratio_y) ? ratio_x : ratio_y;
+
+    f32 dst_w = src_w*ratio;
+    f32 dst_h = src_h*ratio;
+    f32 dst_x = (wnd_w - dst_w)/2;
+    f32 dst_y = (wnd_h - dst_h)/2;
+
+    f32 vertices[] = {
+      dst_x, dst_y, dst_x+dst_w, dst_y+dst_h,
+      src_x, src_y, src_w, src_h,
+    };
+
+    r_ogl_os_window_select(ms_state->window);
+
+    glViewport(0, 0, (GLsizei)wnd_w, (GLsizei)wnd_h);
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glUseProgram(ms_state->shader);
+    glBindVertexArray(ms_state->all_purpose_vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, ms_state->scratch_buffer_64kb);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribDivisor(0, 1);
+    glVertexAttribDivisor(1, 1);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 8*sizeof(f32), (void *)0);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 8*sizeof(f32), (void *)(4*sizeof(f32)));
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, ms_state->canvas_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ms_state->canvas.w, ms_state->canvas.h, 0, GL_BGRA, GL_UNSIGNED_BYTE, ms_state->canvas.data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    glUniform2f(glGetUniformLocation(ms_state->shader, "u_viewport_size_px"), wnd_w, wnd_h);
+
+    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, 1);
+
+    r_ogl_os_window_swap(ms_state->window);
+  }
+
+  // NOTE: reset frame state
+  {
+    memory_copy_array(ms_state->prev_key_state, ms_state->curr_key_state);
+    arena_clear(ms_state->frame_arena);
+  }
+
+  // NOTE: wait frame
   {
     u64 time_end = get_time_us();
-    f32 sec_per_frame = (time_end - m_state->time_start)/million(1.0f);
-    if (sec_per_frame < m_state->target_sec_per_frame) {
-      u32 ms_to_sleep = (u32)((m_state->target_sec_per_frame - sec_per_frame)*thousand(1.0f));
+    f32 sec_per_frame = (time_end - ms_state->time_start)/million(1.0f);
+    if (sec_per_frame < ms_state->target_sec_per_frame) {
+      u32 ms_to_sleep = (u32)((ms_state->target_sec_per_frame - sec_per_frame)*thousand(1.0f));
       if (ms_to_sleep > 0) {
         sleep_ms(ms_to_sleep);
       }
-      while (sec_per_frame < m_state->target_sec_per_frame) {
-        sec_per_frame = (get_time_us() - m_state->time_start)/million(1.0f);
+      while (sec_per_frame < ms_state->target_sec_per_frame) {
+        sec_per_frame = (get_time_us() - ms_state->time_start)/million(1.0f);
       }
     }
   }
 
-  m_state->time_end = get_time_us();
-  m_state->us_per_frame = m_state->time_end - m_state->time_start;
-  m_state->time_start = m_state->time_end;
-
-  r_end();
-  memory_copy_array(m_state->prev_key_state, m_state->curr_key_state);
-  arena_clear(m_state->frame_arena);
+  ms_state->time_end = get_time_us();
+  ms_state->us_per_frame = ms_state->time_end - ms_state->time_start;
+  ms_state->time_start = ms_state->time_end;
 
   scratch_end(scratch);
   return(should_quit);
@@ -678,70 +640,137 @@ entry_point(int argc, char **argv) {
   timeBeginPeriod(1);
 #endif
 
-  Arena *arena = arena_alloc();
-  m_state = push_array(arena, M_State, 1);
-  m_state->arena = arena;
-  m_state->frame_arena = arena_alloc();
-
-  wm_init();
-  r_init();
-
-  String8 exec_path = get_process_info()->exec_path;
-  String8 data_path = str8_cat(m_state->arena, exec_path, s("/../data/"));
-  if (!set_current_path(data_path)) {
-    Temp scratch = scratch_begin(0, 0);
-    String8 message = str8f(scratch.arena, "Failed to set current path to \"%.*s\".", str8_varg(data_path));
-    sh_message(1, str8_lit("Fatal Error"), message);
-    abort_self(1);
-    scratch_end(scratch);
+  // NOTE: init misery state
+  {
+    Arena *arena = arena_alloc();
+    ms_state = push_array(arena, MS_State, 1);
+    ms_state->arena = arena;
+    ms_state->frame_arena = arena_alloc();
   }
 
-  IMG_Data img = img_data_from_file_path(m_state->arena, s("pico8_font.bmp"));
-  SR_Canvas atlas = sr_canvas_make(img.data, img.w, img.h, img.w);
-  String8 chars = str8_copy(m_state->arena, s(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "));
-  m_state->font = sr_font_make(m_state->arena, atlas, 4, 6, &chars);
+  // NOTE: init opengl
+  {
+    r_ogl_os_init();
 
-  for (u32 idx = 0; idx < MAX_NUM_TEXTURES; idx += 1) {
-    u32 *data = push_array(m_state->arena, u32, pow2(TILE_SIZE));
-    for (s32 y = 0; y < TILE_SIZE; y += 1) {
-      for (s32 x = 0; x < TILE_SIZE; x += 1) {
-        u32 color = 0xff000000;
-        if (((x+y)%2) == 0) {
-          color |= (0xff << (8*idx));
+#define X(name, r, p) name = (name##_Proc_Type *)r_ogl_os_load_proc(#name);
+    R_OGL_PROC_XLIST;
+#undef X
+
+    // NOTE: build shader
+    {
+      struct {GLenum type; String8 *src; GLuint out; String8 errors;} stages[] = {
+        {GL_VERTEX_SHADER,   &r_ogl_rect_vshad_src},
+        {GL_FRAGMENT_SHADER, &r_ogl_rect_fshad_src},
+      };
+
+      for_each_element(idx, stages) {
+        stages[idx].out = glCreateShader(stages[idx].type);
+        GLint src_size = (GLint)stages[idx].src->size;
+        glShaderSource(stages[idx].out, 1, (const GLchar **)&stages[idx].src->str, &src_size);
+        glCompileShader(stages[idx].out);
+        GLint info_log_length = 0;
+        GLint status = 0;
+        glGetShaderiv(stages[idx].out, GL_COMPILE_STATUS, &status);
+        glGetShaderiv(stages[idx].out, GL_INFO_LOG_LENGTH, &info_log_length);
+        if (info_log_length != 0) {
+          stages[idx].errors.size = info_log_length;
+          stages[idx].errors.str = push_array(ms_state->arena, u8, info_log_length+1);
+          glGetShaderInfoLog(stages[idx].out, info_log_length, 0, (char *)stages[idx].errors.str);
+          sh_message(1, str8_lit("OpenGL: Shader Compilation Error"), stages[idx].errors);
         }
-        data[y*TILE_SIZE + x] = color;
       }
+
+      GLuint program = glCreateProgram();
+      for_each_element(idx, stages) {
+        glAttachShader(program, stages[idx].out);
+      }
+
+      glLinkProgram(program);
+      glValidateProgram(program);
+      ms_state->shader = program;
     }
-    m_state->images[idx] = sr_canvas_make(data, TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+    glGenVertexArrays(1, &ms_state->all_purpose_vao);
+
+    glGenBuffers(1, &ms_state->scratch_buffer_64kb);
+    glBindBuffer(GL_ARRAY_BUFFER, ms_state->scratch_buffer_64kb);
+    glBufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
 
-  s32 canvas_w = SCREEN_W + MAP_MINI_W;
-  s32 canvas_h = max(SCREEN_H, MAP_MINI_H);
-  m_state->canvas = sr_canvas_alloc(m_state->arena, canvas_w, canvas_h);
-  glGenTextures(1, &m_state->canvas_tex);
+  // NOTE: find data path
+  {
+    String8 exec_path = get_process_info()->exec_path;
+    String8 data_path = str8_cat(ms_state->arena, exec_path, s("/../data/"));
+    if (!set_current_path(data_path)) {
+      Temp scratch = scratch_begin(0, 0);
+      String8 message = str8f(scratch.arena, "Failed to set current path to \"%.*s\".", str8_varg(data_path));
+      sh_message(1, str8_lit("Fatal Error"), message);
+      abort_self(1);
+      scratch_end(scratch);
+    }
+  }
 
-  String8 window_name = s("misery");
-  Vector2 window_size = vector2_make(800, 600);
-  m_state->window = wm_window_open(window_name, window_size);
-  r_ogl_os_window_equip(m_state->window);
+  // NOTE: make font
+  {
+    Image img = img_from_file_path(ms_state->arena, s("pico8_font.bmp"));
+    SR_Canvas atlas = sr_canvas_make(img.data, img.w, img.h, img.w);
+    String8 chars = str8_copy(ms_state->arena, s(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "));
+    ms_state->font = sr_font_make(ms_state->arena, atlas, 4, 6, &chars);
+  }
 
-  m_state->dim = 2.0f;
-  m_state->pos_x = 2.0f*TILE_SIZE;
-  m_state->pos_y = 2.0f*TILE_SIZE;
-  m_state->dir_delta = 0.0f;
-  m_state->dir_speed = rad_from_deg_f32(160.0f);
-  m_state->dir_angle = 0.0f;
-  m_state->mov_delta = 0.0f;
-  m_state->mov_speed = TILE_SIZE*2.0f;
+  // NOTE: make test images
+  {
+    ms_state->image_count = 3;
+    ms_state->images = push_array(ms_state->arena, SR_Canvas, ms_state->image_count);
+    for (u32 idx = 0; idx < ms_state->image_count; idx += 1) {
+      u32 *data = push_array(ms_state->arena, u32, pow2(TILE_SIZE));
+      for (s32 y = 0; y < TILE_SIZE; y += 1) {
+        for (s32 x = 0; x < TILE_SIZE; x += 1) {
+          u32 color = 0xff000000;
+          if (((x+y)%2) == 0) {
+            color |= (0xff << (8*idx));
+          }
+          data[y*TILE_SIZE + x] = color;
+        }
+      }
+      ms_state->images[idx] = sr_canvas_make(data, TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    }
+  }
 
-  m_state->fov_angle = rad_from_deg_f32(60.0f);
-  m_state->proj_plane_dist = 0.5f*SCREEN_W/tan_f32(0.5f*m_state->fov_angle);
-  m_state->ray_count = SCREEN_W;
+  // NOTE: make canvas
+  {
+    s32 canvas_w = SCREEN_W + MINI_MAP_W;
+    s32 canvas_h = max(SCREEN_H, MINI_MAP_H);
+    ms_state->canvas = sr_canvas_alloc(ms_state->arena, canvas_w, canvas_h);
+    glGenTextures(1, &ms_state->canvas_tex);
+  }
 
-  m_state->refresh_rate = 60.0f;
-  m_state->target_sec_per_frame = 1.0f/m_state->refresh_rate;
-  m_state->time_start = get_time_us();
-  wm_window_first_paint(m_state->window);
+  // NOTE: open window
+  {
+    String8 window_name = s("misery");
+    Vector2 window_size = vector2_make(800, 600);
+    ms_state->window = wm_window_open(window_name, window_size);
+    r_ogl_os_window_equip(ms_state->window);
+  }
+
+  ms_state->dim = 2.0f;
+  ms_state->pos_x = 2.0f*TILE_SIZE;
+  ms_state->pos_y = 2.0f*TILE_SIZE;
+  ms_state->dir_delta = 0.0f;
+  ms_state->dir_speed = rad_from_deg_f32(160.0f);
+  ms_state->dir_angle = 0.0f;
+  ms_state->mov_delta = 0.0f;
+  ms_state->mov_speed = TILE_SIZE*2.0f;
+
+  ms_state->fov_angle = rad_from_deg_f32(80.0f);
+  ms_state->proj_plane_dist = 0.5f*SCREEN_W/tan_f32(0.5f*ms_state->fov_angle);
+  ms_state->ray_count = SCREEN_W;
+
+  ms_state->refresh_rate = 60.0f;
+  ms_state->target_sec_per_frame = 1.0f/ms_state->refresh_rate;
+  ms_state->time_start = get_time_us();
+  wm_window_first_paint(ms_state->window);
 
   for (;!frame(););
 
@@ -749,6 +778,3 @@ entry_point(int argc, char **argv) {
   timeEndPeriod(1);
 #endif
 }
-
-// TODO:
-// - better collision

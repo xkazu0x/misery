@@ -12,7 +12,7 @@
 #include <float.h>
 #include <string.h>
 
-#if CC_MSVC || (CC_CLANG && OS_WINDOWS)
+#if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
 #include <intrin.h>
 #endif
 
@@ -28,25 +28,25 @@
 #define global   static
 #define local    static
 
-#if CC_MSVC
+#if COMPILER_MSVC
 # define thread_static __declspec(thread)
-#elif CC_CLANG || CC_GCC
+#elif COMPILER_CLANG || COMPILER_GCC
 # define thread_static __thread
 #else
 # error thread_static not defined for this compiler.
 #endif
 
-#if CC_MSVC
+#if COMPILER_MSVC
 # define force_inline __forceinline
-#elif CC_CLANG || CC_GCC
+#elif COMPILER_CLANG || COMPILER_GCC
 # define force_inline __attribute__((always_inline))
 #else
 # error force_inline not defined for this compiler.
 #endif
 
-#if CC_MSVC
+#if COMPILER_MSVC
 # define no_inline __declspec(noinline)
-#elif CC_CLANG || CC_GCC
+#elif COMPILER_CLANG || COMPILER_GCC
 # define no_inline __attribute__((noinline))
 #else
 # error no_inline not defined for this compiler.
@@ -85,19 +85,19 @@
 ////////////////////////////////
 // NOTE: Type -> Alignment
 
-#if CC_MSVC
+#if COMPILER_MSVC
 # define align_of(T) __alignof(T)
-#elif CC_CLANG
+#elif COMPILER_CLANG
 # define align_of(T) __alignof(T)
-#elif CC_GCC
+#elif COMPILER_GCC
 # define align_of(T) __alignof__(T)
 #else
 # error aling_of not defined for this compiler.
 #endif
 
-#if CC_MSVC
+#if COMPILER_MSVC
 # define align_type(x) __declspec(align(x))
-#elif CC_CLANG || CC_GCC
+#elif COMPILER_CLANG || COMPILER_GCC
 # define align_type(x) __attribute__((aligned(x)))
 #else
 # error align_type not defined for this compiler.
@@ -145,9 +145,9 @@
 ////////////////////////////////
 // NOTE: Asserts
 
-#if CC_MSVC
+#if COMPILER_MSVC
 # define trap() __debugbreak()
-#elif CC_CLANG || CC_GCC
+#elif COMPILER_CLANG || COMPILER_GCC
 # define trap() __builtin_trap()
 #else
 # error Unknown trap intrinsic for this compiler.
@@ -232,12 +232,12 @@
 ////////////////////////////////
 // NOTE: Address Sanitizer Markup
 
-#if CC_MSVC
+#if COMPILER_MSVC
 # if defined(__SANITIZE_ADDRESS__)
 #  define ASAN_ENABLED 1
 #  define ASAN_NO_ADDR __declspec(no_sanitize_address)
 # endif
-#elif CC_CLANG
+#elif COMPILER_CLANG
 # if defined(__has_feature)
 #  if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
 #   define ASAN_ENABLED 1
@@ -528,11 +528,11 @@ typedef enum Compiler {
   Compiler_CLANG,
   Compiler_COUNT,
 } Compiler;
-#if CC_MSVC
+#if COMPILER_MSVC
 # define Compiler_CURRENT Compiler_MSVC
-#elif CC_GCC
+#elif COMPILER_GCC
 # define Compiler_CURRENT Compiler_GCC
-#elif CC_CLANG
+#elif COMPILER_CLANG
 # define Compiler_CURRENT Compiler_CLANG
 #else
 # define Compiler_CURRENT Compiler_NULL
@@ -543,14 +543,14 @@ typedef enum Compiler {
 
 typedef struct Date_Time Date_Time;
 struct Date_Time {
-  u16 usec;  // [0,999]
-  u16 msec;  // [0,999]
-  u16 sec;   // [0,60]
-  u16 min;   // [0,59]
-  u16 hour;  // [0,24]
+  u16 usec; // [0,999]
+  u16 msec; // [0,999]
+  u16 sec;  // [0,60]
+  u16 min;  // [0,59]
+  u16 hour; // [0,24]
   u16 day;
   u32 mon;
-  u32 year;  // 1=1 CE, 0=1 BC
+  u32 year; // 1=1 CE, 0=1 BC
 };
 
 typedef u64 Dense_Time;
@@ -569,6 +569,18 @@ internal u64 ctz32(u32 mask);
 internal u64 ctz64(u64 mask);
 internal u64 clz32(u32 mask);
 internal u64 clz64(u64 mask);
+
+////////////////////////////////
+// NOTE: Memory Functions
+
+internal void memory_write16(void *ptr, u16 v);
+internal void memory_write32(void *ptr, u32 v);
+internal void memory_write64(void *ptr, u64 v);
+
+internal u8  memory_read8(void *ptr);
+internal u16 memory_read16(void *ptr);
+internal u32 memory_read32(void *ptr);
+internal u64 memory_read64(void *ptr);
 
 ////////////////////////////////
 // NOTE: Toolchain/Environment Enum Functions

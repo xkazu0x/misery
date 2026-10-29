@@ -1,35 +1,35 @@
 ////////////////////////////////
 // NOTE: Globals
 
-thread_static TCTX *tctx_thread_local;
+thread_static Thread_Context *tctx_thread_local;
 
 ////////////////////////////////
 // NOTE: Thread Context Functions
 
 // NOTE: thread-context allocation & selection
 
-internal TCTX *
+internal Thread_Context *
 tctx_alloc(void) {
   Arena *arena0 = arena_alloc();
   Arena *arena1 = arena_alloc();
-  TCTX *tctx = push_array(arena0, TCTX, 1);
+  Thread_Context *tctx = push_array(arena0, Thread_Context, 1);
   tctx->arenas[0] = arena0;
   tctx->arenas[1] = arena1;
   return(tctx);
 }
 
 internal void
-tctx_release(TCTX *tctx) {
+tctx_release(Thread_Context *tctx) {
   arena_release(tctx->arenas[1]);
   arena_release(tctx->arenas[0]);
 }
 
 internal void
-tctx_select(TCTX *tctx) {
+tctx_select(Thread_Context *tctx) {
   tctx_thread_local = tctx;
 }
 
-internal TCTX *
+internal Thread_Context *
 tctx_selected(void) {
   return(tctx_thread_local);
 }
@@ -38,7 +38,7 @@ tctx_selected(void) {
 
 internal Arena *
 tctx_get_scratch(Arena **conflicts, u64 count) {
-  TCTX *tctx = tctx_selected();
+  Thread_Context *tctx = tctx_selected();
   Arena *result = 0;
   Arena **arena_ptr = tctx->arenas;
   for (u64 i = 0; i < array_count(tctx->arenas); i += 1, arena_ptr += 1) {

@@ -25,7 +25,7 @@ safe_cast_s32(s64 x) {
 ////////////////////////////////
 // NOTE: Bit Patterns
 
-#if CC_MSVC || (CC_CLANG && OS_WINDOWS)
+#if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
 
 internal u64
 ctz32(u32 mask) {
@@ -55,7 +55,7 @@ clz64(u64 mask) {
   return(63 - idx);
 }
 
-#elif CC_CLANG || CC_GCC
+#elif COMPILER_CLANG || COMPILER_GCC
 
 internal u64
 ctz32(u32 mask) {
@@ -80,6 +80,52 @@ clz64(u64 mask) {
 #else
 # error Bit instrinsic functions not defined for this compiler.
 #endif
+
+////////////////////////////////
+// NOTE: Memory Functions
+
+internal void
+memory_write16(void *ptr, u16 v) {
+  memory_copy(ptr, &v, sizeof(v));
+}
+
+internal void
+memory_write32(void *ptr, u32 v) {
+  memory_copy(ptr, &v, sizeof(v));
+}
+
+internal void
+memory_write64(void *ptr, u64 v) {
+  memory_copy(ptr, &v, sizeof(v));
+}
+
+internal u8
+memory_read8(void *ptr) {
+  u8 result = 0;
+  memory_copy(&result, ptr, sizeof(result));
+  return(result);
+}
+
+internal u16
+memory_read16(void *ptr) {
+  u16 result;
+  memory_copy(&result, ptr, sizeof(result));
+  return(result);
+}
+
+internal u32
+memory_read32(void *ptr) {
+  u32 result;
+  memory_copy(&result, ptr, sizeof(result));
+  return(result);
+}
+
+internal u64
+memory_read64(void *ptr) {
+  u64 result;
+  memory_copy(&result, ptr, sizeof(result));
+  return(result);
+}
 
 ////////////////////////////////
 // NOTE: Toolchain/Environment Enum Functions
