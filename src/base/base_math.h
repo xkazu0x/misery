@@ -208,6 +208,6 @@ internal Vector4 rgba4_from_bgra32(u32 hex);
 internal u32 bgra32_mul(u32 hex, Vector4 v);
 internal u32 bgra32_muls(u32 hex, f32 s);
 internal u32 bgra32_muls_rgb(u32 hex, f32 s);
-internal u32 bgra32_mul32(u32 hex, u32 hex0);
+internal u32 bgra32_mul32(u32 hex, u32 v);
 
 #endif // BASE_MATH_H

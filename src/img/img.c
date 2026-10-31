@@ -1,81 +1,81 @@
-internal Image_Context
-img_ctx_make(String8 data) {
-  Image_Context result = {data, data.str, data.str + data.size};
+internal IMG__Ctx
+img__ctx_make(String8 data) {
+  IMG__Ctx result = {data, data.str, data.str + data.size};
   return(result);
 }
 
 internal u8
-img_ctx_read8(Image_Context *ctx) {
+img__ctx_read8(IMG__Ctx *ctx) {
   u8 result = memory_read8(ctx->ptr);
   ctx->ptr += sizeof(result);
   return(result);
 }
 
 internal u16
-img_ctx_read16(Image_Context *ctx) {
+img__ctx_read16(IMG__Ctx *ctx) {
   u16 result = memory_read16(ctx->ptr);
   ctx->ptr += sizeof(result);
   return(result);
 }
 
 internal u32
-img_ctx_read32(Image_Context *ctx) {
+img__ctx_read32(IMG__Ctx *ctx) {
   u32 result = memory_read32(ctx->ptr);
   ctx->ptr += sizeof(result);
   return(result);
 }
 
 internal void
-img_ctx_rewind(Image_Context *ctx) {
+img__ctx_rewind(IMG__Ctx *ctx) {
   ctx->ptr = ctx->data.str;
   ctx->opl = ctx->ptr + ctx->data.size;
 }
 
 internal b32
-img_bmp_check_and_rewind(Image_Context *ctx) {
-  if (img_ctx_read8(ctx) != 'B') invalid_path;
-  if (img_ctx_read8(ctx) != 'M') invalid_path;
-  img_ctx_read32(ctx); // discard filesize
-  img_ctx_read16(ctx); // discard reserved
-  img_ctx_read16(ctx); // discard reserved
-  img_ctx_read32(ctx); // discard data offset
-  u32 sz = img_ctx_read32(ctx);
+img__bmp_check_and_rewind(IMG__Ctx *ctx) {
+  if (img__ctx_read8(ctx) != 'B') invalid_path;
+  if (img__ctx_read8(ctx) != 'M') invalid_path;
+  img__ctx_read32(ctx); // discard filesize
+  img__ctx_read16(ctx); // discard reserved
+  img__ctx_read16(ctx); // discard reserved
+  img__ctx_read32(ctx); // discard data offset
+  u32 sz = img__ctx_read32(ctx);
   b32 z = (sz == 12 || sz == 40 || sz == 56 || sz == 108 || sz == 124);
-  img_ctx_rewind(ctx);
+  img__ctx_rewind(ctx);
   return(z);
 }
 
 internal void
-img_bmp_parse_header(Image_Context *ctx, Image_Bmp_Info *info) {
+img__bmp_parse_header(IMG__Ctx *ctx, IMG__BMP_Info *info) {
   u32 hsz;
-  if (img_ctx_read8(ctx) != 'B') invalid_path;
-  if (img_ctx_read8(ctx) != 'M') invalid_path;
-  img_ctx_read32(ctx); // discard filesize
-  img_ctx_read16(ctx); // discard reserved
-  img_ctx_read16(ctx); // discard reserved
-  info->off = img_ctx_read32(ctx);
-  info->hsz = hsz = img_ctx_read32(ctx);
+  if (img__ctx_read8(ctx) != 'B') invalid_path;
+  if (img__ctx_read8(ctx) != 'M') invalid_path;
+  img__ctx_read32(ctx); // discard filesize
+  img__ctx_read16(ctx); // discard reserved
+  img__ctx_read16(ctx); // discard reserved
+  info->off = img__ctx_read32(ctx);
+  info->hsz = hsz = img__ctx_read32(ctx);
   info->rm = info->gm = info->bm = info->am = 0;
   if (hsz != 12 && hsz != 40 && hsz != 56 && hsz != 108 && hsz != 124) invalid_path;
   if (hsz == 12) {
-    info->w = img_ctx_read16(ctx);
-    info->h = img_ctx_read16(ctx);
+    info->w = img__ctx_read16(ctx);
+    info->h = img__ctx_read16(ctx);
   } else {
-    info->w = img_ctx_read32(ctx);
-    info->h = img_ctx_read32(ctx);
+    info->w = img__ctx_read32(ctx);
+    info->h = img__ctx_read32(ctx);
   }
-  if (img_ctx_read16(ctx) != 1) invalid_path;
-  info->bpp = img_ctx_read16(ctx);
+  if (img__ctx_read16(ctx) != 1) invalid_path;
+  info->bpp = img__ctx_read16(ctx);
   if (hsz != 12) {
-    u32 compress = img_ctx_read32(ctx);
+    u32 compress = img__ctx_read32(ctx);
     if (compress == 1 || compress == 2) invalid_path;
     if (compress == 3 && info->bpp != 16 && info->bpp != 32) invalid_path;
     if (compress >= 4) invalid_path;
-    img_ctx_read32(ctx); // discard size of image
-    img_ctx_read32(ctx); // discard hres
-    img_ctx_read32(ctx); // discard vres
-    img_ctx_read32(ctx); // discard colors used
-    img_ctx_read32(ctx); // discard colors important
+    img__ctx_read32(ctx); // discard size of image
+    img__ctx_read32(ctx); // discard hres
+    img__ctx_read32(ctx); // discard vres
+    img__ctx_read32(ctx); // discard colors used
+    img__ctx_read32(ctx); // discard colors important
     if (hsz == 40) {
       if (info->bpp == 16) {
         info->rm = bitmask5 << 11;
@@ -101,38 +101,38 @@ img_bmp_parse_header(Image_Context *ctx, Image_Bmp_Info *info) {
           info->am = bitmask8 << 24;
         }
       } else if (compress == 3) {
-        info->rm = img_ctx_read32(ctx);
-        info->gm = img_ctx_read32(ctx);
-        info->bm = img_ctx_read32(ctx);
-        info->am = img_ctx_read32(ctx);
+        info->rm = img__ctx_read32(ctx);
+        info->gm = img__ctx_read32(ctx);
+        info->bm = img__ctx_read32(ctx);
+        info->am = img__ctx_read32(ctx);
       }
     }
     if (hsz == 108 || hsz == 124) {
-      img_ctx_read32(ctx); // discard color space
+      img__ctx_read32(ctx); // discard color space
       for (u32 idx = 0; idx < 12; idx += 1) {
-        img_ctx_read32(ctx); // discard color space parameters
+        img__ctx_read32(ctx); // discard color space parameters
       }
       if (hsz == 124) {
-        img_ctx_read32(ctx); // discard rendering intent
-        img_ctx_read32(ctx); // discard offset of profile data
-        img_ctx_read32(ctx); // discard size of profile data
-        img_ctx_read32(ctx); // discard reserved
+        img__ctx_read32(ctx); // discard rendering intent
+        img__ctx_read32(ctx); // discard offset of profile data
+        img__ctx_read32(ctx); // discard size of profile data
+        img__ctx_read32(ctx); // discard reserved
       }
     }
   }
 }
 
-internal Image
-img_from_file_path(Arena *arena, String8 path) {
-  Image result = {0};
+internal IMG_Data
+img_data_from_file_path(Arena *arena, String8 path) {
+  IMG_Data result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   String8 path_copy = str8_copy(scratch.arena, path);
   String8 file_data = data_from_file_path(scratch.arena, path_copy);
   if (file_data.size > 0) {
-    Image_Context ctx = img_ctx_make(file_data);
-    if (!img_bmp_check_and_rewind(&ctx)) invalid_path;
-    Image_Bmp_Info info;
-    img_bmp_parse_header(&ctx, &info);
+    IMG__Ctx ctx = img__ctx_make(file_data);
+    if (!img__bmp_check_and_rewind(&ctx)) invalid_path;
+    IMG__BMP_Info info;
+    img__bmp_parse_header(&ctx, &info);
     if (info.bpp != 32) invalid_path;
     u32 row_sz = info.w*(info.bpp/8);
     u64 sz = info.h*row_sz;

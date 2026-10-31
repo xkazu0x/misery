@@ -250,16 +250,16 @@ sr_image(SR_Canvas canvas,
   s32 dh = y1 - y0;
   s32 sw = u1 - u0;
   s32 sh = v1 - v0;
-  f32 xm = (1.0f/dw)*sw;
-  f32 ym = (1.0f/dh)*sh;
+  f32 xm = (1.0f/(f32)dw)*(f32)sw;
+  f32 ym = (1.0f/(f32)dh)*(f32)sh;
   if (x0 < 0) {u0 = -x0; x0 = 0;}
   if (y0 < 0) {v0 = -y0; y0 = 0;}
   if (x1 > canvas.w - 1) x1 = canvas.w - 1;
   if (y1 > canvas.h - 1) y1 = canvas.h - 1;
   for (s32 y = y0; y <= y1; y += 1) {
-    s32 v = round_t(s32, (y - y0)*ym) + v0;
+    s32 v = round_t(s32, ((y - y0)*ym)) + v0;
     for (s32 x = x0; x <= x1; x += 1) {
-      s32 u = round_t(s32, (x - x0)*xm) + u0;
+      s32 u = round_t(s32, ((x - x0)*xm)) + u0;
       u32 c = image.data[v*image.pitch + u];
       if (c != 0xffff00ff) {
         canvas.data[y*canvas.pitch + x] = bgra32_mul32(c, color);
