@@ -121,7 +121,6 @@ struct Sprite_Cast {
   f32 dist;
   f32 angle;
   u32 image_idx;
-  b32 is_visible;
 };
 
 typedef struct Ray_Cast Ray_Cast;
@@ -180,6 +179,9 @@ struct MS_State {
 
   u32 sprite_count;
   Sprite_Cast *sprites;
+
+  u32 visible_sprite_count;
+  Sprite_Cast **visible_sprites;
 };
 
 global MS_State *ms_state = 0;
@@ -434,20 +436,18 @@ draw_2d(SR_Canvas canvas) {
 
   // NOTE: sprites
   {
-    for (u32 idx = 0; idx < ms_state->sprite_count; idx += 1) {
-      Sprite_Cast sprite = ms_state->sprites[idx];
-      if (sprite.is_visible) {
-        SR_Canvas image = ms_state->images[sprite.image_idx];
-        s32 x0 = (sprite.x - TILE_SIZE/2)*MINI_MAP_SCALE;
-        s32 y0 = (sprite.y - TILE_SIZE/2)*MINI_MAP_SCALE;
-        s32 x1 = (sprite.x + TILE_SIZE/2 - 1)*MINI_MAP_SCALE;
-        s32 y1 = (sprite.y + TILE_SIZE/2 - 1)*MINI_MAP_SCALE;
-        s32 u0 = 0;
-        s32 v0 = 0;
-        s32 u1 = image.w - 1;
-        s32 v1 = image.h - 1;
-        sr_image(canvas, x0, y0, x1, y1, u0, v0, u1, v1, image, ~0u);
-      }
+    for (u32 idx = 0; idx < ms_state->visible_sprite_count; idx += 1) {
+      Sprite_Cast *sprite = ms_state->visible_sprites[idx];
+      SR_Canvas image = ms_state->images[sprite->image_idx];
+      s32 x0 = (sprite->x - TILE_SIZE/2)*MINI_MAP_SCALE;
+      s32 y0 = (sprite->y - TILE_SIZE/2)*MINI_MAP_SCALE;
+      s32 x1 = (sprite->x + TILE_SIZE/2 - 1)*MINI_MAP_SCALE;
+      s32 y1 = (sprite->y + TILE_SIZE/2 - 1)*MINI_MAP_SCALE;
+      s32 u0 = 0;
+      s32 v0 = 0;
+      s32 u1 = image.w - 1;
+      s32 v1 = image.h - 1;
+      sr_image(canvas, x0, y0, x1, y1, u0, v0, u1, v1, image, ~0u);
     }
   }
 }
@@ -480,30 +480,29 @@ draw_3d(SR_Canvas canvas) {
   }
 
   // NOTE: sprite projection
-  for (u32 idx = 0; idx < ms_state->sprite_count; idx += 1) {
-    Sprite_Cast sprite = ms_state->sprites[idx];
-    if (sprite.is_visible) {
-      f32 proj_sprite_h = (TILE_SIZE/sprite.dist)*ms_state->proj_plane_dist;
-      f32 proj_sprite_w = proj_sprite_h;
-      f32 sprite_angle = atan2_f32(sprite.y - ms_state->pos_y, sprite.x - ms_state->pos_x) - ms_state->dir_angle;
-      s32 proj_sprite_x = tan_f32(sprite_angle)*ms_state->proj_plane_dist;
-      {
-        SR_Canvas image = ms_state->images[sprite.image_idx];
-        s32 y0 = (SCREEN_H - proj_sprite_h)/2.0f;
-        s32 x0 = (SCREEN_W - proj_sprite_w)/2.0f + proj_sprite_x;
-        s32 x1 = x0 + proj_sprite_w;
-        s32 y1 = y0 + proj_sprite_h;
-        f32 xm = (image.w/proj_sprite_w);
-        f32 ym = (image.h/proj_sprite_h);
-        for (s32 y = y0; y < y1; y += 1) {
-          s32 v = (y - y0)*ym;
-          for (s32 x = x0; x < x1; x += 1) {
-            s32 u = (x - x0)*xm;
-            u32 color = sr_pget(image, u, v);
-            if (color != 0xffff00ff) {
-              sr_pset(canvas, x, y, color);
-            }
-          }
+  for (u32 idx = 0; idx < ms_state->visible_sprite_count; idx += 1) {
+    Sprite_Cast *sprite = ms_state->visible_sprites[idx];
+
+    f32 proj_sprite_h = (TILE_SIZE/sprite->dist)*ms_state->proj_plane_dist;
+    f32 proj_sprite_w = proj_sprite_h;
+
+    f32 sprite_angle = atan2_f32(sprite->y - ms_state->pos_y, sprite->x - ms_state->pos_x) - ms_state->dir_angle;
+    s32 proj_sprite_x = tan_f32(sprite_angle)*ms_state->proj_plane_dist;
+
+    SR_Canvas image = ms_state->images[sprite->image_idx];
+    s32 y0 = (SCREEN_H - proj_sprite_h)/2.0f;
+    s32 x0 = (SCREEN_W - proj_sprite_w)/2.0f + proj_sprite_x;
+    s32 x1 = x0 + proj_sprite_w;
+    s32 y1 = y0 + proj_sprite_h;
+    f32 xm = (image.w/proj_sprite_w);
+    f32 ym = (image.h/proj_sprite_h);
+    for (s32 y = y0; y < y1; y += 1) {
+      s32 v = (y - y0)*ym;
+      for (s32 x = x0; x < x1; x += 1) {
+        s32 u = (x - x0)*xm;
+        u32 color = sr_pget(image, u, v);
+        if (color != 0xffff00ff) {
+          sr_pset(canvas, x, y, color);
         }
       }
     }
@@ -574,6 +573,9 @@ frame(void) {
 
     // NOTE: sprites
     {
+      ms_state->visible_sprite_count = 0;
+      ms_state->visible_sprites = push_array(ms_state->frame_arena, Sprite_Cast *, ms_state->sprite_count);
+
       f32 pos_x = ms_state->pos_x;
       f32 pos_y = ms_state->pos_y;
       f32 dir_angle = ms_state->dir_angle;
@@ -588,11 +590,22 @@ frame(void) {
         if (delta_angle >  pi32) delta_angle -= tau32;
         if (delta_angle < -pi32) delta_angle += tau32;
         delta_angle = abs_f32(delta_angle);
-        f32 epsilon = 0.3f;
-        sprite->is_visible = (delta_angle < (half_fov_angle + epsilon));
-        if (sprite->is_visible) {
+        if (delta_angle < (half_fov_angle + 0.3f)) {
           sprite->angle = delta_angle;
           sprite->dist = distance_between_points(sprite->x, sprite->y, pos_x, pos_y);
+          ms_state->visible_sprites[ms_state->visible_sprite_count] = sprite;
+          ms_state->visible_sprite_count += 1;
+        }
+      }
+
+      // NOTE: sort sprites by distance
+      for (u32 a_idx = 0; a_idx < ms_state->visible_sprite_count; a_idx += 1) {
+        for (u32 b_idx = 0; b_idx < ms_state->visible_sprite_count; b_idx += 1) {
+          if (ms_state->visible_sprites[a_idx]->dist > ms_state->visible_sprites[b_idx]->dist) {
+            Sprite_Cast *temp = ms_state->visible_sprites[a_idx];
+            ms_state->visible_sprites[a_idx] = ms_state->visible_sprites[b_idx];
+            ms_state->visible_sprites[b_idx] = temp;
+          }
         }
       }
     }
@@ -811,12 +824,13 @@ entry_point(int argc, char **argv) {
   {
     s32 w = 4;
     s32 h = 4;
-    ms_state->image_count = 4;
+    ms_state->image_count = 5;
     ms_state->images = push_array(ms_state->arena, SR_Canvas, ms_state->image_count);
     ms_state->images[0] = gen_test_image(ms_state->arena, w, h, 0xff0000ff);
     ms_state->images[1] = gen_test_image(ms_state->arena, w, h, 0xff00ff00);
     ms_state->images[2] = gen_test_image(ms_state->arena, w, h, 0xffff0000);
     ms_state->images[3] = gen_test_image(ms_state->arena, w, h, 0xffffff00);
+    ms_state->images[4] = gen_test_image(ms_state->arena, w, h, 0xff00ffff);
   }
 
   // NOTE: make sprites
@@ -825,14 +839,14 @@ entry_point(int argc, char **argv) {
     ms_state->sprites = push_array(ms_state->arena, Sprite_Cast, ms_state->sprite_count);
     {
       Sprite_Cast *s = &ms_state->sprites[0];
-      s->x = 1*TILE_SIZE + TILE_SIZE/2;
-      s->y = 1*TILE_SIZE + TILE_SIZE/2;
-      s->image_idx = 3;
+      s->x = 2*TILE_SIZE + TILE_SIZE/2;
+      s->y = 2*TILE_SIZE + TILE_SIZE/2;
+      s->image_idx = 4;
     }
     {
       Sprite_Cast *s = &ms_state->sprites[1];
-      s->x = (MAP_NUM_ROWS - 2)*TILE_SIZE;
-      s->y = (MAP_NUM_COLS - 2)*TILE_SIZE;
+      s->x = 1*TILE_SIZE + TILE_SIZE/2;
+      s->y = 1*TILE_SIZE + TILE_SIZE/2;
       s->image_idx = 3;
     }
   }
@@ -854,8 +868,8 @@ entry_point(int argc, char **argv) {
   }
 
   ms_state->dim = 2.0f;
-  ms_state->pos_x = 2.0f*TILE_SIZE + TILE_SIZE*0.5f;
-  ms_state->pos_y = 2.0f*TILE_SIZE + TILE_SIZE*0.5f;
+  ms_state->pos_x = (MAP_NUM_ROWS/2)*TILE_SIZE;
+  ms_state->pos_y = (MAP_NUM_COLS/2)*TILE_SIZE;
   ms_state->dir_delta = 0.0f;
   ms_state->dir_speed = rad_from_deg_f32(160.0f);
   ms_state->dir_angle = 0.0f;
