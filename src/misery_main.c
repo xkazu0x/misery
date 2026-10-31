@@ -17,9 +17,6 @@
 # pragma comment(lib, "winmm")
 #endif
 
-#define atan2_f32(y,x)   atan2f(y,x)
-#define atan2_f64(y,x)   atan2(y,x)
-
 #define C_BLACK                 0x000000
 #define C_DARK_BLUE             0x1D2B53
 #define C_DARK_PURPLE           0x7E2553
@@ -126,7 +123,7 @@ struct Sprite_Cast {
 typedef struct Ray_Cast Ray_Cast;
 struct Ray_Cast {
   b32 hit;
-  u32 e_idx;
+  u32 img_idx;
   f32 x, y, len;
 };
 
@@ -289,7 +286,7 @@ ray_cast(f32 ray_x, f32 ray_y, f32 ray_angle) {
       u32 map_idx = get_map_tile_from_pos(x, y);
       if (map_idx != 0) {
         horz_cast.hit = 1;
-        horz_cast.e_idx = map_idx;
+        horz_cast.img_idx = map_idx - 1;
         horz_cast.x = dx;
         horz_cast.y = dy;
         horz_cast.len = distance_between_points(ray_x, ray_y, horz_cast.x, horz_cast.y);
@@ -326,7 +323,7 @@ ray_cast(f32 ray_x, f32 ray_y, f32 ray_angle) {
       u32 map_idx = get_map_tile_from_pos(x, y);
       if (map_idx != 0) {
         vert_cast.hit = 1;
-        vert_cast.e_idx = map_idx;
+        vert_cast.img_idx = map_idx - 1;
         vert_cast.x = dx;
         vert_cast.y = dy;
         vert_cast.len = distance_between_points(ray_x, ray_y, vert_cast.x, vert_cast.y);
@@ -464,7 +461,7 @@ draw_3d(SR_Canvas canvas) {
       s32 y0 = (s32)((SCREEN_H - proj_wall_h)/2.0f);
       s32 y1 = y0 + proj_wall_h - 1;
 
-      SR_Canvas image = ms_state->images[ray.cast.e_idx - 1];
+      SR_Canvas image = ms_state->images[ray.cast.img_idx];
       s32 dx = (s32)((ray.is_vert) ? ray.cast.y : ray.cast.x);
       s32 u = ((f32)(dx % TILE_SIZE)/TILE_SIZE)*image.w;
       f32 ym = (1.0f/proj_wall_h)*image.h;
