@@ -501,7 +501,7 @@ draw_3d(SR_Canvas canvas) {
       for (s32 x = x0; x < x1; x += 1) {
         s32 u = (x - x0)*xm;
         u32 color = sr_pget(image, u, v);
-        if (color != 0xffff00ff) {
+        if (sprite->dist < ms_state->rays[x].cast.len && color != 0xffff00ff) {
           sr_pset(canvas, x, y, color);
         }
       }
