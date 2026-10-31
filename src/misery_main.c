@@ -482,8 +482,9 @@ draw_3d(SR_Canvas canvas) {
   // NOTE: sprite projection
   for (u32 idx = 0; idx < ms_state->visible_sprite_count; idx += 1) {
     Sprite_Cast *sprite = ms_state->visible_sprites[idx];
+    f32 perp_dist = sprite->dist*cos_f32(sprite->angle);
 
-    f32 proj_sprite_h = (TILE_SIZE/sprite->dist)*ms_state->proj_plane_dist;
+    f32 proj_sprite_h = (TILE_SIZE/perp_dist)*ms_state->proj_plane_dist;
     f32 proj_sprite_w = proj_sprite_h;
 
     f32 sprite_angle = atan2_f32(sprite->y - ms_state->pos_y, sprite->x - ms_state->pos_x) - ms_state->dir_angle;
