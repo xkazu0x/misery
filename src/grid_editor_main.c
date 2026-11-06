@@ -93,6 +93,12 @@ global String8 r_ogl_rect_fshad_src = str8_lit_comp(
   "}"
 );
 
+typedef struct GE_Map GE_Map;
+struct GE_Map {
+  s32 w, h;
+  u32 *data;
+};
+
 typedef struct GE_State GE_State;
 struct GE_State {
   Arena *perm_arena;
@@ -121,16 +127,28 @@ struct GE_State {
   WM_Key curr_key_state[WM_Key_COUNT];
   WM_Key prev_key_state[WM_Key_COUNT];
 
-  Vector2 window_mouse;
-  Vector2 canvas_mouse;
+  Vector2 window_mouse; // NOTE: window space
+  s32 mouse_off_x; // NOTE: canvas space
+  s32 mouse_off_y; // NOTE: canvas space
 
   f32 cam_speed;
   Vector2 cam_pos;
   Vector2 cam_dpos;
+  s32 cam_off_x;
+  s32 cam_off_y;
+  s32 cam_mod_off_x;
+  s32 cam_mod_off_y;
+
+  s32 mouse_cell_x;
+  s32 mouse_cell_y;
+
+  GE_Map map;
+  s32 map_rel_x;
+  s32 map_rel_y;
+  s32 map_cell_x;
+  s32 map_cell_y;
 };
 
-#define GRID_DIM 8
-global u32 grid_data[GRID_DIM*GRID_DIM];
 global GE_State *ge_state = 0;
 
 internal b32
@@ -157,26 +175,17 @@ range2_center(Vector2 c, Vector2 d) {
   return(result);
 }
 
-internal b32
-frame(void) {
-  b32 should_quit = 0;
-  Temp scratch = scratch_begin(0, 0);
-
-  WM_Event_List events = wm_get_events(scratch.arena, 0);
-  for_each_node(WM_Event, event, events.first) {
-    switch (event->type) {
-      case WM_Event_Type_WINDOW_CLOSE: {
-        should_quit = 1;
-      } break;
-      case WM_Event_Type_PRESS:
-      case WM_Event_Type_RELEASE: {
-        ge_state->curr_key_state[event->key] = (event->type == WM_Event_Type_PRESS);
-      } break;
-      case WM_Event_Type_MOUSE_MOVE: {
-        ge_state->window_mouse = event->position;
-      } break;
-    }
+internal void
+sr_texts(SR_Canvas canvas, s32 x, s32 y, String8_List texts, SR_Font font, u32 color) {
+  for_each_node(String8_Node, n, texts.first) {
+    sr_text(canvas, x, y, n->v, font, color);
+    y += font.glyph_h;
   }
+}
+
+internal void
+ge_update(void) {
+  f32 dt = ge_state->target_sec_per_frame;
 
   // NOTE: find output rect
   {
@@ -201,7 +210,7 @@ frame(void) {
     ge_state->output_rect = range2_make(dst_x, dst_y, dst_x+dst_w, dst_y+dst_h);
   }
 
-  // NOTE: transform mouse window space to canvas space
+  // NOTE: transform mouse position from window space to canvas space
   {
     Range2  output = ge_state->output_rect;
     Vector2 output_size = range2_dim(output);
@@ -214,124 +223,192 @@ frame(void) {
 
     if (mouse.x < 0.0f) mouse.x = 0.0f;
     if (mouse.y < 0.0f) mouse.y = 0.0f;
-    if (mouse.x > canvas_size.x) mouse.x = canvas_size.x;
-    if (mouse.y > canvas_size.y) mouse.y = canvas_size.y;
+    if (mouse.x > canvas_size.x - 1) mouse.x = canvas_size.x - 1;
+    if (mouse.y > canvas_size.y - 1) mouse.y = canvas_size.y - 1;
 
-    ge_state->canvas_mouse = mouse;
+    ge_state->mouse_off_x = floor_f32(mouse.x);
+    ge_state->mouse_off_y = floor_f32(mouse.y);
   }
 
-  // NOTE: update
+  // NOTE: camera movement
   {
-    f32 dt = ge_state->target_sec_per_frame;
-    Vector2 cam_dpos = {0};
-    if (key_down(WM_Key_UP))    cam_dpos.y =-1;
-    if (key_down(WM_Key_DOWN))  cam_dpos.y = 1;
-    if (key_down(WM_Key_LEFT))  cam_dpos.x =-1;
-    if (key_down(WM_Key_RIGHT)) cam_dpos.x = 1;
-    f32 cam_speed = ge_state->cam_speed;
-    Vector2 old_cam_pos = ge_state->cam_pos;
-    Vector2 new_cam_pos = vector2_add(old_cam_pos, vector2_muls(cam_dpos, cam_speed*dt));
-    ge_state->cam_pos = new_cam_pos;
+    Vector2 dpos = {0};
+    if (key_down(WM_Key_W)) dpos.y =-1;
+    if (key_down(WM_Key_S)) dpos.y = 1;
+    if (key_down(WM_Key_A)) dpos.x =-1;
+    if (key_down(WM_Key_D)) dpos.x = 1;
+    f32 speed = ge_state->cam_speed;
+    Vector2 old_pos = ge_state->cam_pos;
+    Vector2 new_pos = vector2_add(old_pos, vector2_muls(dpos, speed*dt));
+    ge_state->cam_pos = new_pos;
+    ge_state->cam_off_x = -round_t(s32, new_pos.x);
+    ge_state->cam_off_y = -round_t(s32, new_pos.y);
+    ge_state->cam_mod_off_x = (ge_state->cam_off_x % TILE_SIZE) - TILE_SIZE;
+    ge_state->cam_mod_off_y = (ge_state->cam_off_y % TILE_SIZE) - TILE_SIZE;
   }
 
-  // NOTE: draw
+  // NOTE: calculate mouse/grid cell positions
   {
-    SR_Canvas canvas = ge_state->canvas;
-    sr_fill(canvas, C_BLACK);
+    s32 mouse_off_x = ge_state->mouse_off_x;
+    s32 mouse_off_y = ge_state->mouse_off_y;
 
-    Vector2 cam_pos = ge_state->cam_pos;
-    s32 off_x = -round_t(s32, cam_pos.x);
-    s32 off_y = -round_t(s32, cam_pos.y);
+    s32 cam_off_x = ge_state->cam_off_x;
+    s32 cam_off_y = ge_state->cam_off_y;
+    s32 cam_mod_off_x = ge_state->cam_mod_off_x;
+    s32 cam_mod_off_y = ge_state->cam_mod_off_y;
 
-    // NOTE: grid
-    {
-      // NOTE: blank
-      for (u32 dy = 0; dy < SCREEN_NUM_ROWS; dy += 1) {
-        for (u32 dx = 0; dx < SCREEN_NUM_COLS; dx += 1) {
-          s32 x = (dx*TILE_SIZE + off_x) % SCREEN_W;
-          s32 y = (dy*TILE_SIZE + off_y) % SCREEN_H;
-          sr_pset(canvas, x, y, C_DARK_BLUE);
-        }
+    ge_state->mouse_cell_x = (f32)(mouse_off_x - cam_mod_off_x)/TILE_SIZE;
+    ge_state->mouse_cell_y = (f32)(mouse_off_y - cam_mod_off_y)/TILE_SIZE;
+
+    s32 map_rel_x = mouse_off_x - cam_off_x;
+    s32 map_rel_y = mouse_off_y - cam_off_y;
+    s32 map_cell_x = floor_f32((f32)map_rel_x/TILE_SIZE);
+    s32 map_cell_y = floor_f32((f32)map_rel_y/TILE_SIZE);
+
+    ge_state->map_rel_x = map_rel_x;
+    ge_state->map_rel_y = map_rel_y;
+    ge_state->map_cell_x = map_cell_x;
+    ge_state->map_cell_y = map_cell_y;
+  }
+
+  // NOTE: edit grid map
+  {
+    GE_Map *map = &ge_state->map;
+    s32 map_cell_x = ge_state->map_cell_x;
+    s32 map_cell_y = ge_state->map_cell_y;
+    if (key_down(WM_Key_LEFT_MOUSE_BUTTON)) {
+      if (map_cell_x >= 0 && map_cell_x < map->w && map_cell_y >= 0 && map_cell_y < map->h) {
+        map->data[map_cell_y*map->w + map_cell_x] = 1;
       }
+    }
 
-      // NOTE: inside
-      for (u32 dy = 0; dy < GRID_DIM; dy += 1) {
-        for (u32 dx = 0; dx < GRID_DIM; dx += 1) {
-          s32 x0 = dx*TILE_SIZE + off_x;
-          s32 y0 = dy*TILE_SIZE + off_y;
-          s32 x1 = x0 + TILE_SIZE;
-          s32 y1 = y0 + TILE_SIZE;
-          sr_rectl(canvas, x0, y0, x1, y1, C_LAVENDER);
-        }
+    if (key_down(WM_Key_RIGHT_MOUSE_BUTTON)) {
+      if (map_cell_x >= 0 && map_cell_x < map->w && map_cell_y >= 0 && map_cell_y < map->h) {
+        map->data[map_cell_y*map->w + map_cell_x] = 0;
       }
+    }
+  }
+}
 
-      // NOTE: border
-      {
-        s32 x0 = off_x;
-        s32 y0 = off_y;
-        s32 x1 = x0 + GRID_DIM*TILE_SIZE;
-        s32 y1 = y0 + GRID_DIM*TILE_SIZE;
-        sr_rectl(canvas, x0, y0, x1, y1, C_LIGHT_GREY);
-      }
+internal void
+ge_render(void) {
+  SR_Canvas canvas = ge_state->canvas;
+  sr_fill(canvas, C_BLACK);
 
-      // NOTE: offset line
-      {
-        s32 x0 = 0;
-        s32 y0 = 0;
-        s32 x1 = off_x;
-        s32 y1 = off_y;
-        sr_line(canvas, x0, y0, x1, y1, C_DARK_PURPLE);
-      }
+  s32 cam_off_x = ge_state->cam_off_x;
+  s32 cam_off_y = ge_state->cam_off_y;
 
-      // NOTE: selected cell
-      {
-        Vector2 p = ge_state->canvas_mouse;
-        s32 mx = floor_f32(p.x);
-        s32 my = floor_f32(p.y);
-        s32 rx = (off_x % TILE_SIZE) - TILE_SIZE;
-        s32 ry = (off_y % TILE_SIZE) - TILE_SIZE;
-        s32 cx = (mx - rx)/TILE_SIZE;
-        s32 cy = (my - ry)/TILE_SIZE;
-        s32 x0 = cx*TILE_SIZE + rx;
-        s32 y0 = cy*TILE_SIZE + ry;
+  GE_Map *map = &ge_state->map;
+
+  // NOTE: blank
+  for (s32 dy = 0; dy < SCREEN_NUM_ROWS; dy += 1) {
+    for (s32 dx = 0; dx < SCREEN_NUM_COLS; dx += 1) {
+      s32 x = (dx*TILE_SIZE + cam_off_x) % SCREEN_W;
+      s32 y = (dy*TILE_SIZE + cam_off_y) % SCREEN_H;
+      sr_pset(canvas, x, y, C_DARK_BLUE);
+    }
+  }
+
+  // NOTE: grid
+  {
+    for (s32 dy = 0; dy < map->h; dy += 1) {
+      for (s32 dx = 0; dx < map->w; dx += 1) {
+        // NOTE: lines
+        s32 x0 = dx*TILE_SIZE + cam_off_x;
+        s32 y0 = dy*TILE_SIZE + cam_off_y;
         s32 x1 = x0 + TILE_SIZE;
         s32 y1 = y0 + TILE_SIZE;
-        sr_rectl(canvas, x0, y0, x1, y1, C_BLUE);
+        sr_rectl(canvas, x0, y0, x1, y1, C_LAVENDER);
+
+        // NOTE: content
+        u32 map_idx = map->data[dy*map->w + dx];
+        if (map_idx != 0) {
+          sr_rectf(canvas, x0, y0, x1, y1, C_GREEN);
+        }
       }
     }
 
-    // NOTE: info
+    // NOTE: border
     {
-      SR_Font font = ge_state->font;
-
-      {
-        Vector2 p = ge_state->canvas_mouse;
-        s32 mx = floor_f32(p.x);
-        s32 my = floor_f32(p.y);
-        s32 rx = (off_x % TILE_SIZE) - TILE_SIZE;
-        s32 ry = (off_y % TILE_SIZE) - TILE_SIZE;
-        s32 cx = (mx - rx)/TILE_SIZE;
-        s32 cy = (my - ry)/TILE_SIZE;
-        String8 text0 = str8f(scratch.arena, "mouse %3i %3i", mx, my);
-        String8 text1 = str8f(scratch.arena, " grid %3i %3i", cx, cy);
-        s32 x = 0, y = 0;
-        sr_text(canvas, x, y, text0, font, C_WHITE); y += font.glyph_h;
-        sr_text(canvas, x, y, text1, font, C_WHITE);
-      }
-
-      // NOTE: time
-      {
-        Temp scratch = scratch_begin(0, 0);
-        f32 mspf = ge_state->us_per_frame/thousand(1.0f);
-        f32 fps = 1.0f/(ge_state->us_per_frame/million(1.0f));
-        String8 text = str8f(scratch.arena, "%.2ffps\n%.2fms", fps, mspf);
-        Vector2 size = sr_font_text_size(font, text);
-        s32 x = canvas.w - size.x - 1, y = 0;
-        sr_text(canvas, x, y, text, font, C_LAVENDER);
-        scratch_end(scratch);
-      }
+      s32 x0 = cam_off_x;
+      s32 y0 = cam_off_y;
+      s32 x1 = x0 + map->w*TILE_SIZE;
+      s32 y1 = y0 + map->h*TILE_SIZE;
+      sr_rectl(canvas, x0, y0, x1, y1, C_LIGHT_GREY);
     }
   }
+
+  // NOTE: offset line
+  {
+    s32 x0 = 0;
+    s32 y0 = 0;
+    s32 x1 = cam_off_x;
+    s32 y1 = cam_off_y;
+    sr_line(canvas, x0, y0, x1, y1, C_DARK_PURPLE);
+  }
+
+  // NOTE: selected cell
+  {
+    s32 x0 = ge_state->mouse_cell_x*TILE_SIZE + ge_state->cam_mod_off_x;
+    s32 y0 = ge_state->mouse_cell_y*TILE_SIZE + ge_state->cam_mod_off_y;
+    s32 x1 = x0 + TILE_SIZE;
+    s32 y1 = y0 + TILE_SIZE;
+    sr_rectl(canvas, x0, y0, x1, y1, C_BLUE);
+  }
+
+  // NOTE: info
+  {
+    SR_Font font = ge_state->font;
+
+    // NOTE: coordinate positions
+    {
+      Temp scratch = scratch_begin(0, 0);
+      String8_List texts = {0};
+      str8_list_pushf(ge_state->tran_arena, &texts, "  cam_off  %3i %3i", ge_state->cam_off_x, ge_state->cam_off_y);
+      str8_list_pushf(ge_state->tran_arena, &texts, "mouse_off  %3i %3i", ge_state->mouse_off_x, ge_state->mouse_off_y);
+      str8_list_pushf(ge_state->tran_arena, &texts, "mouse_cell %3i %3i", ge_state->mouse_cell_x, ge_state->mouse_cell_y);
+      str8_list_pushf(ge_state->tran_arena, &texts, "  map_cell %3i %3i", ge_state->map_cell_x, ge_state->map_cell_y);
+      sr_texts(canvas, 0, 0, texts, ge_state->font, C_WHITE);
+      scratch_end(scratch);
+    }
+
+    // NOTE: time
+    {
+      Temp scratch = scratch_begin(0, 0);
+      f32 mspf = ge_state->us_per_frame/thousand(1.0f);
+      f32 fps = 1.0f/(ge_state->us_per_frame/million(1.0f));
+      String8 text = str8f(scratch.arena, "%.2ffps\n%.2fms", fps, mspf);
+      Vector2 size = sr_font_text_size(font, text);
+      s32 x = canvas.w - size.x - 1, y = 0;
+      sr_text(canvas, x, y, text, font, C_LAVENDER);
+      scratch_end(scratch);
+    }
+  }
+}
+
+internal b32
+frame(void) {
+  b32 should_quit = 0;
+  Temp scratch = scratch_begin(0, 0);
+
+  WM_Event_List events = wm_get_events(scratch.arena, 0);
+  for_each_node(WM_Event, event, events.first) {
+    switch (event->type) {
+      case WM_Event_Type_WINDOW_CLOSE: {
+        should_quit = 1;
+      } break;
+      case WM_Event_Type_PRESS:
+      case WM_Event_Type_RELEASE: {
+        ge_state->curr_key_state[event->key] = (event->type == WM_Event_Type_PRESS);
+      } break;
+      case WM_Event_Type_MOUSE_MOVE: {
+        ge_state->window_mouse = event->position;
+      } break;
+    }
+  }
+
+  ge_update();
+  ge_render();
 
   // NOTE: flip
   {
@@ -511,6 +588,10 @@ entry_point(int argc, char **argv) {
     ge_state->cam_speed = 32.0f;
     ge_state->cam_pos = vector2_zero();
     ge_state->cam_dpos = vector2_zero();
+
+    ge_state->map.w = 8;
+    ge_state->map.h = 8;
+    ge_state->map.data = push_array(ge_state->perm_arena, u32, ge_state->map.w*ge_state->map.h);
   }
 
   ge_state->refresh_rate = 60.0f;
