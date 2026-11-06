@@ -43,6 +43,11 @@ if [[ "${misery:-0}" == "1" ]]; then
   did_build=1 && $compile ../src/misery_main.c $cc_link $cc_os_gfx $cc_render -o misery;
   if [[ -v run ]]; then ./misery; fi
 fi
+
+if [[ "${grid_editor:-0}" == "1" ]]; then
+  did_build=1 && $compile ../src/grid_editor_main.c $cc_link $cc_os_gfx $cc_render -o grid_editor;
+  if [[ -v run ]]; then ./grid_editor; fi
+fi
 cd ..
 
 # --- Warn On No Builds -------------------------------------------------------
