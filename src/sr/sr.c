@@ -149,6 +149,7 @@ sr_line(SR_Canvas canvas, s32 x0, s32 y0, s32 x1, s32 y1, u32 color) {
 
 internal void
 sr_lineh(SR_Canvas canvas, s32 y, s32 x0, s32 x1, u32 color) {
+  if (x0 > x1) swap_t(s32, x0, x1);
   if (x0 < 0) x0 = 0;
   if (x1 > canvas.w - 1) x1 = canvas.w - 1;
   if (y >= 0 && y < canvas.h) {
@@ -160,6 +161,7 @@ sr_lineh(SR_Canvas canvas, s32 y, s32 x0, s32 x1, u32 color) {
 
 internal void
 sr_linev(SR_Canvas canvas, s32 x, s32 y0, s32 y1, u32 color) {
+  if (y0 > y1) swap_t(s32, y0, y1);
   if (y0 < 0) y0 = 0;
   if (y1 > canvas.h - 1) y1 = canvas.h - 1;
   if (x >= 0 && x < canvas.h) {
