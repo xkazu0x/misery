@@ -111,40 +111,42 @@ global String8 r_ogl_rect_fshad_src = str8_lit_comp(
   "}"
 );
 
-typedef struct Sprite_Cast Sprite_Cast;
-struct Sprite_Cast {
-  f32 x;
-  f32 y;
-  f32 dist;
-  f32 angle;
-  u32 image_idx;
-};
-
-typedef struct Ray_Cast Ray_Cast;
-struct Ray_Cast {
-  b32 hit;
-  u32 img_idx;
-  f32 x, y, len;
+typedef u32 Ray_Flags;
+enum {
+  Ray_Flag_HIT     = (1 << 0),
+  Ray_Flag_IS_VERT = (1 << 1),
 };
 
 typedef struct Ray Ray;
 struct Ray {
+  u32 idx;
+  f32 x;
+  f32 y;
+  f32 len;
   f32 angle;
-  b32 is_vert;
-  Ray_Cast cast;
+  Ray_Flags flags;
+};
+
+typedef struct Entity Entity;
+struct Entity {
+  u32 image_idx;
+  f32 x;
+  f32 y;
 };
 
 typedef struct MS_State MS_State;
 struct MS_State {
-  Arena *arena;
-  Arena *frame_arena;
+  Arena *perm_arena;
+  Arena *tran_arena;
 
   SR_Font font;
   u32 image_count;
   SR_Canvas *images;
-
   SR_Canvas canvas;
   WM_Window window;
+
+  Vector2 window_size;
+  Range2  canvas_rect;
 
   GLuint canvas_tex;
   GLuint shader;
@@ -154,12 +156,20 @@ struct MS_State {
   WM_Key curr_key_state[WM_Key_COUNT];
   WM_Key prev_key_state[WM_Key_COUNT];
 
+  // NOTE: time spec
   f32 refresh_rate;
   f32 target_sec_per_frame;
-  u64 time_start;
-  u64 time_end;
-  u64 us_per_frame;
 
+  // NOTE: time info
+  u64 prev_time;
+  u64 curr_time;
+  u64 usec_per_frame;
+
+  // NOTE: entity
+  u32 num_entities;
+  Entity *entities;
+
+  // NOTE: camera
   f32 dim;
   f32 pos_x;
   f32 pos_y;
@@ -168,17 +178,15 @@ struct MS_State {
   f32 dir_delta;
   f32 dir_speed;
   f32 dir_angle;
-
   f32 fov_angle;
-  f32 proj_plane_dist;
-  u32 ray_count;
-  Ray *rays;
+  f32 proj_plane_len;
 
-  u32 sprite_count;
-  Sprite_Cast *sprites;
+  // NOTE: ray cast
+  u32 num_wall_rays;
+  Ray *wall_rays;
 
-  u32 visible_sprite_count;
-  Sprite_Cast **visible_sprites;
+  u32 num_sprite_rays;
+  Ray *sprite_rays;
 };
 
 global MS_State *ms_state = 0;
@@ -243,7 +251,7 @@ is_facing_left(f32 angle) {
 }
 
 internal f32
-wrap_angle_2pi(f32 angle) {
+angle_wrap_2pi(f32 angle) {
   angle = mod_f32(angle, tau32);
   if (angle < 0.0f) angle += tau32;
   return(angle);
@@ -256,98 +264,231 @@ distance_between_points(f32 x0, f32 y0, f32 x1, f32 y1) {
 }
 
 internal Ray
-ray_cast(f32 ray_x, f32 ray_y, f32 ray_angle) {
-  ray_angle = wrap_angle_2pi(ray_angle);
+ray_make(Ray_Flags flags) {
+  Ray result = {0};
+  result.len = max_f32;
+  result.flags = flags;
+  return(result);
+}
+
+internal Ray
+ray_cast__horz(f32 x, f32 y, f32 angle) {
+  Ray result = ray_make(0);
   f32 intercept_x, intercept_y;
   f32 step_x, step_y;
 
-  // NOTE: horizontal intersection
-  Ray_Cast horz_cast = {0};
-  horz_cast.len = max_f32;
-  {
-    intercept_y = floor_f32(ray_y/TILE_SIZE)*TILE_SIZE;
-    intercept_y += (is_facing_down(ray_angle)) ? TILE_SIZE : 0;
-    intercept_x = ray_x + (intercept_y - ray_y)/tan_f32(ray_angle);
+  intercept_y = floor_f32(y/TILE_SIZE)*TILE_SIZE;
+  intercept_y += (is_facing_down(angle)) ? TILE_SIZE : 0;
+  intercept_x = x + (intercept_y - y)/tan_f32(angle);
 
-    step_y = TILE_SIZE;
-    step_y *= (is_facing_up(ray_angle)) ? -1.0f : 1.0f;
+  step_y = TILE_SIZE;
+  step_y *= (is_facing_up(angle)) ? -1.0f : 1.0f;
 
-    step_x = TILE_SIZE/tan_f32(ray_angle);
-    step_x *= (is_facing_left(ray_angle)  && step_x > 0.0f) ? -1.0f : 1.0f;
-    step_x *= (is_facing_right(ray_angle) && step_x < 0.0f) ? -1.0f : 1.0f;
+  step_x = TILE_SIZE/tan_f32(angle);
+  step_x *= (is_facing_left(angle)  && step_x > 0.0f) ? -1.0f : 1.0f;
+  step_x *= (is_facing_right(angle) && step_x < 0.0f) ? -1.0f : 1.0f;
 
-    f32 dx = intercept_x;
-    f32 dy = intercept_y;
+  f32 dx = intercept_x;
+  f32 dy = intercept_y;
 
-    while (dx >= 0 && dx <= MAP_W && dy >= 0 && dy <= MAP_H) {
-      f32 x = dx;
-      f32 y = dy;
-      if (is_facing_up(ray_angle)) y -= 1.0f;
-      u32 map_idx = get_map_tile_from_pos(x, y);
-      if (map_idx != 0) {
-        horz_cast.hit = 1;
-        horz_cast.img_idx = map_idx - 1;
-        horz_cast.x = dx;
-        horz_cast.y = dy;
-        horz_cast.len = distance_between_points(ray_x, ray_y, horz_cast.x, horz_cast.y);
-        break;
-      } else {
-        dx += step_x;
-        dy += step_y;
-      }
+  while (dx >= 0 && dx <= MAP_W && dy >= 0 && dy <= MAP_H) {
+    f32 xx = dx;
+    f32 yy = dy;
+    if (is_facing_up(angle)) yy -= 1.0f;
+    u32 map_idx = get_map_tile_from_pos(xx, yy);
+    if (map_idx != 0) {
+      result.idx = map_idx;
+      result.x = dx;
+      result.y = dy;
+      result.len = distance_between_points(x, y, dx, dy);
+      result.angle = angle;
+      result.flags |= Ray_Flag_HIT;
+      break;
+    } else {
+      dx += step_x;
+      dy += step_y;
     }
-  }
-
-  // NOTE: vertical intersection
-  Ray_Cast vert_cast = {0};
-  vert_cast.len = max_f32;
-  {
-    intercept_x = floor_f32(ray_x/TILE_SIZE)*TILE_SIZE;
-    intercept_x += (is_facing_right(ray_angle)) ? TILE_SIZE : 0;
-    intercept_y = ray_y + (intercept_x - ray_x)*tan_f32(ray_angle);
-
-    step_x = TILE_SIZE;
-    step_x *= (is_facing_left(ray_angle)) ? -1.0f : 1.0f;
-
-    step_y = TILE_SIZE*tan_f32(ray_angle);
-    step_y *= (is_facing_up(ray_angle)   && step_y > 0.0f) ? -1.0f : 1.0f;
-    step_y *= (is_facing_down(ray_angle) && step_y < 0.0f) ? -1.0f : 1.0f;
-
-    f32 dx = intercept_x;
-    f32 dy = intercept_y;
-
-    while (dx >= 0 && dx <= MAP_W && dy >= 0 && dy <= MAP_H) {
-      f32 x = dx;
-      f32 y = dy;
-      if (is_facing_left(ray_angle)) x -= 1;
-      u32 map_idx = get_map_tile_from_pos(x, y);
-      if (map_idx != 0) {
-        vert_cast.hit = 1;
-        vert_cast.img_idx = map_idx - 1;
-        vert_cast.x = dx;
-        vert_cast.y = dy;
-        vert_cast.len = distance_between_points(ray_x, ray_y, vert_cast.x, vert_cast.y);
-        break;
-      } else {
-        dx += step_x;
-        dy += step_y;
-      }
-    }
-  }
-
-  // NOTE: fill ray
-  Ray result = {0};
-  result.angle = ray_angle;
-  if (horz_cast.hit || vert_cast.hit) {
-    result.is_vert = (vert_cast.len < horz_cast.len);
-    result.cast = (result.is_vert) ? vert_cast : horz_cast;
   }
 
   return(result);
 }
 
+internal Ray
+ray_cast__vert(f32 x, f32 y, f32 angle) {
+  Ray result = ray_make(Ray_Flag_IS_VERT);
+  f32 intercept_x, intercept_y;
+  f32 step_x, step_y;
+
+  intercept_x = floor_f32(x/TILE_SIZE)*TILE_SIZE;
+  intercept_x += (is_facing_right(angle)) ? TILE_SIZE : 0;
+  intercept_y = y + (intercept_x - x)*tan_f32(angle);
+
+  step_x = TILE_SIZE;
+  step_x *= (is_facing_left(angle)) ? -1.0f : 1.0f;
+
+  step_y = TILE_SIZE*tan_f32(angle);
+  step_y *= (is_facing_up(angle)   && step_y > 0.0f) ? -1.0f : 1.0f;
+  step_y *= (is_facing_down(angle) && step_y < 0.0f) ? -1.0f : 1.0f;
+
+  f32 dx = intercept_x;
+  f32 dy = intercept_y;
+
+  while (dx >= 0 && dx <= MAP_W && dy >= 0 && dy <= MAP_H) {
+    f32 xx = dx;
+    f32 yy = dy;
+    if (is_facing_left(angle)) xx -= 1;
+    u32 map_idx = get_map_tile_from_pos(xx, yy);
+    if (map_idx != 0) {
+      result.idx = map_idx;
+      result.x = dx;
+      result.y = dy;
+      result.len = distance_between_points(x, y, dx, dy);
+      result.angle = angle;
+      result.flags |= Ray_Flag_HIT;
+      break;
+    } else {
+      dx += step_x;
+      dy += step_y;
+    }
+  }
+
+  return(result);
+}
+
+internal Ray
+ray_cast(f32 x, f32 y, f32 angle) {
+  angle = angle_wrap_2pi(angle);
+  Ray rh = ray_cast__horz(x, y, angle);
+  Ray rv = ray_cast__vert(x, y, angle);
+  Ray result = (rv.len < rh.len) ? rv : rh;
+  return(result);
+}
+
 internal void
-draw_2d(SR_Canvas canvas) {
+ray_cast_update(void) {
+  f32 cam_x = ms_state->pos_x;
+  f32 cam_y = ms_state->pos_y;
+  f32 cam_dir_angle = ms_state->dir_angle;
+  f32 cam_fov_angle = ms_state->fov_angle;
+  f32 cam_half_fov_angle = cam_fov_angle*0.5f;
+  f32 cam_proj_plane_len = ms_state->proj_plane_len;
+
+  // NOTE: wall
+  ms_state->num_wall_rays = SCREEN_W;
+  ms_state->wall_rays = push_array(ms_state->tran_arena, Ray, ms_state->num_wall_rays);
+  for (u32 ray_idx = 0; ray_idx < ms_state->num_wall_rays; ray_idx += 1) {
+    f32 undistorted_angle = atan_f32((ray_idx - ms_state->num_wall_rays/2.0f)/cam_proj_plane_len) + cam_dir_angle;
+    ms_state->wall_rays[ray_idx] = ray_cast(cam_x, cam_y, undistorted_angle);
+  }
+
+  // NOTE: sprite
+  ms_state->num_sprite_rays = 0;
+  ms_state->sprite_rays = push_array(ms_state->tran_arena, Ray, ms_state->num_entities);
+  for (u32 idx = 0; idx < ms_state->num_entities; idx += 1) {
+    Entity *e = &ms_state->entities[idx];
+    f32 dx = e->x - cam_x;
+    f32 dy = e->y - cam_y;
+    f32 angle = atan2_f32(dy, dx);
+    f32 dangle = cam_dir_angle - angle;
+    if (dangle >  pi32) dangle -= tau32;
+    if (dangle < -pi32) dangle += tau32;
+    dangle = abs_f32(dangle);
+    if (dangle < (cam_half_fov_angle + 0.3f)) {
+      Ray *ray = &ms_state->sprite_rays[ms_state->num_sprite_rays];
+      {
+        ray->idx = e->image_idx;
+        ray->x = e->x;
+        ray->y = e->y;
+        ray->len = distance_between_points(ray->x, ray->y, cam_x, cam_y);
+        ray->angle = dangle;
+        ray->flags |= Ray_Flag_HIT;
+      }
+      ms_state->num_sprite_rays += 1;
+    }
+    u32 num_unused_rays = ms_state->num_entities - ms_state->num_sprite_rays;
+    arena_pop(ms_state->tran_arena, num_unused_rays*sizeof(Ray));
+  }
+
+  // NOTE: sprite ray cast sort by length
+  for (u32 a_idx = 0; a_idx < ms_state->num_sprite_rays; a_idx += 1) {
+    for (u32 b_idx = 0; b_idx < ms_state->num_sprite_rays; b_idx += 1) {
+      if (ms_state->sprite_rays[a_idx].len > ms_state->sprite_rays[b_idx].len) {
+        Ray tmp = ms_state->sprite_rays[a_idx];
+        ms_state->sprite_rays[a_idx] = ms_state->sprite_rays[b_idx];
+        ms_state->sprite_rays[b_idx] = tmp;
+      }
+    }
+  }
+}
+
+internal void
+ray_cast_render(SR_Canvas canvas) {
+  f32 cam_x = ms_state->pos_x;
+  f32 cam_y = ms_state->pos_y;
+  f32 cam_dir_angle = ms_state->dir_angle;
+  f32 cam_proj_plane_len = ms_state->proj_plane_len;
+
+  // NOTE: wall projection
+  for (u32 x = 0; x < ms_state->num_wall_rays; x += 1) {
+    Ray ray = ms_state->wall_rays[x];
+    if (ray.flags & Ray_Flag_HIT) {
+      f32 perp_len = cos_f32(ray.angle - cam_dir_angle)*ray.len;
+      f32 proj_h = (TILE_SIZE/perp_len)*cam_proj_plane_len;
+
+      s32 y0 = (SCREEN_H - proj_h)/2.0f;
+      s32 y1 = y0 + proj_h - 1;
+
+      SR_Canvas image = ms_state->images[ray.idx - 1];
+      f32 ray_hit_pos = (ray.flags & Ray_Flag_IS_VERT) ? ray.y : ray.x;
+      f32 tile_rel_pos = ((s32)ray_hit_pos) % TILE_SIZE;
+      s32 u = (tile_rel_pos/TILE_SIZE)*image.w;
+      f32 ym = (1.0f/proj_h)*image.h;
+
+      for (s32 y = y0; y <= y1; y += 1) {
+        s32 v = (y - y0)*ym;
+        u32 color = sr_pget(image, u, v);
+        if (ray.flags & Ray_Flag_IS_VERT) {
+          color = bgra32_muls_rgb(color, 0.5f);
+        }
+        sr_pset(canvas, x, y, color);
+      }
+    }
+  }
+
+  // NOTE: sprite projection
+  for (u32 idx = 0; idx < ms_state->num_sprite_rays; idx += 1) {
+    Ray ray = ms_state->sprite_rays[idx];
+
+    f32 perp_len = cos_f32(ray.angle)*ray.len;
+    f32 proj_h = (TILE_SIZE/perp_len)*cam_proj_plane_len;
+    f32 proj_w = proj_h;
+
+    f32 dangle = atan2_f32(ray.y - cam_y, ray.x - cam_x) - cam_dir_angle;
+    s32 proj_x = tan_f32(dangle)*cam_proj_plane_len;
+
+    SR_Canvas image = ms_state->images[ray.idx];
+    s32 y0 = (SCREEN_H - proj_h)/2.0f;
+    s32 x0 = (SCREEN_W - proj_w)/2.0f + proj_x;
+    s32 x1 = x0 + proj_w;
+    s32 y1 = y0 + proj_h;
+    f32 xm = (image.w/proj_w);
+    f32 ym = (image.h/proj_h);
+
+    for (s32 y = y0; y < y1; y += 1) {
+      s32 v = (y - y0)*ym;
+      for (s32 x = x0; x < x1; x += 1) {
+        s32 u = (x - x0)*xm;
+        u32 color = sr_pget(image, u, v);
+        if (ray.len < ms_state->wall_rays[x].len && color != 0xffff00ff) {
+          sr_pset(canvas, x, y, color);
+        }
+      }
+    }
+  }
+}
+
+internal void
+mini_map_render(SR_Canvas canvas) {
   // NOTE: grid
   {
     s32 x0 = 0;
@@ -393,21 +534,21 @@ draw_2d(SR_Canvas canvas) {
     sr_rectf(canvas, x0, y0, x1, y1, C_BLUE);
   }
 
-  // NOTE: raycast
+  // NOTE: wall ray cast
   {
-    f32 ray_x = ms_state->pos_x;
-    f32 ray_y = ms_state->pos_y;
-    for (u32 idx = 0; idx < ms_state->ray_count; idx += 1) {
-      Ray ray = ms_state->rays[idx];
-      if (ray.cast.hit) {
-        f32 hit_x = ray.cast.x;
-        f32 hit_y = ray.cast.y;
-        if (is_facing_down(ray.angle)) hit_y -= 1;
-        if (is_facing_right(ray.angle)) hit_x -= 1;
-        s32 x0 = ray_x*MINI_MAP_SCALE;
-        s32 y0 = ray_y*MINI_MAP_SCALE;
-        s32 x1 = hit_x*MINI_MAP_SCALE;
-        s32 y1 = hit_y*MINI_MAP_SCALE;
+    f32 cam_x = ms_state->pos_x;
+    f32 cam_y = ms_state->pos_y;
+    for (u32 idx = 0; idx < ms_state->num_wall_rays; idx += 1) {
+      Ray ray = ms_state->wall_rays[idx];
+      if (ray.flags & Ray_Flag_HIT) {
+        f32 ray_x = ray.x;
+        f32 ray_y = ray.y;
+        if (is_facing_right(ray.angle)) ray_x -= 1;
+        if (is_facing_down(ray.angle))  ray_y -= 1;
+        s32 x0 = cam_x*MINI_MAP_SCALE;
+        s32 y0 = cam_y*MINI_MAP_SCALE;
+        s32 x1 = ray_x*MINI_MAP_SCALE;
+        s32 y1 = ray_y*MINI_MAP_SCALE;
         sr_line(canvas, x0, y0, x1, y1, C_YELLOW);
       }
     }
@@ -431,78 +572,20 @@ draw_2d(SR_Canvas canvas) {
     sr_circf(canvas, x, y, d, C_RED);
   }
 
-  // NOTE: sprites
+  // NOTE: sprite ray cast
   {
-    for (u32 idx = 0; idx < ms_state->visible_sprite_count; idx += 1) {
-      Sprite_Cast *sprite = ms_state->visible_sprites[idx];
-      SR_Canvas image = ms_state->images[sprite->image_idx];
-      s32 x0 = (sprite->x - TILE_SIZE/2)*MINI_MAP_SCALE;
-      s32 y0 = (sprite->y - TILE_SIZE/2)*MINI_MAP_SCALE;
-      s32 x1 = (sprite->x + TILE_SIZE/2 - 1)*MINI_MAP_SCALE;
-      s32 y1 = (sprite->y + TILE_SIZE/2 - 1)*MINI_MAP_SCALE;
+    for (u32 idx = 0; idx < ms_state->num_sprite_rays; idx += 1) {
+      Ray ray = ms_state->sprite_rays[idx];
+      SR_Canvas image = ms_state->images[ray.idx];
+      s32 x0 = (ray.x - TILE_SIZE/2)*MINI_MAP_SCALE;
+      s32 y0 = (ray.y - TILE_SIZE/2)*MINI_MAP_SCALE;
+      s32 x1 = (ray.x + TILE_SIZE/2 - 1)*MINI_MAP_SCALE;
+      s32 y1 = (ray.y + TILE_SIZE/2 - 1)*MINI_MAP_SCALE;
       s32 u0 = 0;
       s32 v0 = 0;
       s32 u1 = image.w - 1;
       s32 v1 = image.h - 1;
       sr_image(canvas, x0, y0, x1, y1, u0, v0, u1, v1, image, ~0u);
-    }
-  }
-}
-
-internal void
-draw_3d(SR_Canvas canvas) {
-  // NOTE: wall projection
-  for (u32 x = 0; x < ms_state->ray_count; x += 1) {
-    Ray ray = ms_state->rays[x];
-    if (ray.cast.hit) {
-      f32 perp_dist = cos_f32(ray.angle - ms_state->dir_angle)*ray.cast.len;
-      f32 proj_wall_h = (TILE_SIZE/perp_dist)*ms_state->proj_plane_dist;
-
-      s32 y0 = (s32)((SCREEN_H - proj_wall_h)/2.0f);
-      s32 y1 = y0 + proj_wall_h - 1;
-
-      SR_Canvas image = ms_state->images[ray.cast.img_idx];
-      s32 dx = (s32)((ray.is_vert) ? ray.cast.y : ray.cast.x);
-      s32 u = ((f32)(dx % TILE_SIZE)/TILE_SIZE)*image.w;
-      f32 ym = (1.0f/proj_wall_h)*image.h;
-      for (s32 y = y0; y <= y1; y += 1) {
-        s32 v = (y - y0)*ym;
-        u32 color = sr_pget(image, u, v);
-        if (ray.is_vert) {
-          color = bgra32_muls_rgb(color, 0.5f);
-        }
-        sr_pset(canvas, x, y, color);
-      }
-    }
-  }
-
-  // NOTE: sprite projection
-  for (u32 idx = 0; idx < ms_state->visible_sprite_count; idx += 1) {
-    Sprite_Cast *sprite = ms_state->visible_sprites[idx];
-    f32 perp_dist = sprite->dist*cos_f32(sprite->angle);
-
-    f32 proj_sprite_h = (TILE_SIZE/perp_dist)*ms_state->proj_plane_dist;
-    f32 proj_sprite_w = proj_sprite_h;
-
-    f32 sprite_angle = atan2_f32(sprite->y - ms_state->pos_y, sprite->x - ms_state->pos_x) - ms_state->dir_angle;
-    s32 proj_sprite_x = tan_f32(sprite_angle)*ms_state->proj_plane_dist;
-
-    SR_Canvas image = ms_state->images[sprite->image_idx];
-    s32 y0 = (SCREEN_H - proj_sprite_h)/2.0f;
-    s32 x0 = (SCREEN_W - proj_sprite_w)/2.0f + proj_sprite_x;
-    s32 x1 = x0 + proj_sprite_w;
-    s32 y1 = y0 + proj_sprite_h;
-    f32 xm = (image.w/proj_sprite_w);
-    f32 ym = (image.h/proj_sprite_h);
-    for (s32 y = y0; y < y1; y += 1) {
-      s32 v = (y - y0)*ym;
-      for (s32 x = x0; x < x1; x += 1) {
-        s32 u = (x - x0)*xm;
-        u32 color = sr_pget(image, u, v);
-        if (sprite->dist < ms_state->rays[x].cast.len && color != 0xffff00ff) {
-          sr_pset(canvas, x, y, color);
-        }
-      }
     }
   }
 }
@@ -525,11 +608,32 @@ frame(void) {
     }
   }
 
+  // NOTE: find canvas rect in window space
+  {
+    Vector2 window_size = wm_window_get_size(ms_state->window);
+    if (window_size.x != ms_state->window_size.x ||
+        window_size.y != ms_state->window_size.y) {
+      f32 wnd_w = window_size.x;
+      f32 wnd_h = window_size.y;
+      f32 src_w = ms_state->canvas.w;
+      f32 src_h = ms_state->canvas.h;
+      f32 ratio_x = floor_f32(wnd_w/src_w);
+      f32 ratio_y = floor_f32(wnd_h/src_h);
+      f32 ratio = (ratio_x < ratio_y) ? ratio_x : ratio_y;
+      f32 dst_w = src_w*ratio;
+      f32 dst_h = src_h*ratio;
+      f32 dst_x = (wnd_w - dst_w)/2.0f;
+      f32 dst_y = (wnd_h - dst_h)/2.0f;
+      ms_state->window_size = window_size;
+      ms_state->canvas_rect = range2_make(dst_x, dst_y, dst_x+dst_w, dst_y+dst_h);
+    }
+  }
+
   // NOTE: update
   {
     f32 dt = ms_state->target_sec_per_frame;
 
-    // NOTE: player movement
+    // NOTE: camera movement
     {
       ms_state->mov_delta = 0.0f;
       ms_state->dir_delta = 0.0f;
@@ -540,7 +644,7 @@ frame(void) {
       if (key_down(WM_Key_RIGHT)) ms_state->dir_delta = 1.0f;
 
       ms_state->dir_angle += ms_state->dir_delta*ms_state->dir_speed*dt;
-      ms_state->dir_angle = wrap_angle_2pi(ms_state->dir_angle);
+      ms_state->dir_angle = angle_wrap_2pi(ms_state->dir_angle);
 
       f32 dir_x = cos_f32(ms_state->dir_angle);
       f32 dir_y = sin_f32(ms_state->dir_angle);
@@ -556,74 +660,24 @@ frame(void) {
       }
     }
 
-    // NOTE: cast rays
-    {
-      ms_state->rays = push_array(ms_state->frame_arena, Ray, ms_state->ray_count);
-      f32 fov_angle = ms_state->fov_angle;
-      u32 ray_count = ms_state->ray_count;
-      f32 ray_x = ms_state->pos_x;
-      f32 ray_y = ms_state->pos_y;
-      for (u32 ray_idx = 0; ray_idx < ray_count; ray_idx += 1) {
-        f32 ray_angle = ms_state->dir_angle + atan_f32((ray_idx - ray_count/2.0f)/ms_state->proj_plane_dist);
-        ms_state->rays[ray_idx] = ray_cast(ray_x, ray_y, ray_angle);
-      }
-    }
-
-    // NOTE: sprites
-    {
-      ms_state->visible_sprite_count = 0;
-      ms_state->visible_sprites = push_array(ms_state->frame_arena, Sprite_Cast *, ms_state->sprite_count);
-
-      f32 pos_x = ms_state->pos_x;
-      f32 pos_y = ms_state->pos_y;
-      f32 dir_angle = ms_state->dir_angle;
-      f32 fov_angle = ms_state->fov_angle;
-      f32 half_fov_angle = fov_angle*0.5f;
-      for (u32 idx = 0; idx < ms_state->sprite_count; idx += 1) {
-        Sprite_Cast *sprite = &ms_state->sprites[idx];
-        f32 dy = sprite->y - pos_y;
-        f32 dx = sprite->x - pos_x;
-        f32 angle = atan2_f32(dy, dx);
-        f32 delta_angle = dir_angle - angle;
-        if (delta_angle >  pi32) delta_angle -= tau32;
-        if (delta_angle < -pi32) delta_angle += tau32;
-        delta_angle = abs_f32(delta_angle);
-        if (delta_angle < (half_fov_angle + 0.3f)) {
-          sprite->angle = delta_angle;
-          sprite->dist = distance_between_points(sprite->x, sprite->y, pos_x, pos_y);
-          ms_state->visible_sprites[ms_state->visible_sprite_count] = sprite;
-          ms_state->visible_sprite_count += 1;
-        }
-      }
-
-      // NOTE: sort sprites by distance
-      for (u32 a_idx = 0; a_idx < ms_state->visible_sprite_count; a_idx += 1) {
-        for (u32 b_idx = 0; b_idx < ms_state->visible_sprite_count; b_idx += 1) {
-          if (ms_state->visible_sprites[a_idx]->dist > ms_state->visible_sprites[b_idx]->dist) {
-            Sprite_Cast *temp = ms_state->visible_sprites[a_idx];
-            ms_state->visible_sprites[a_idx] = ms_state->visible_sprites[b_idx];
-            ms_state->visible_sprites[b_idx] = temp;
-          }
-        }
-      }
-    }
+    ray_cast_update();
   }
 
   // NOTE: draw
   {
     SR_Canvas canvas = ms_state->canvas;
-    SR_Canvas clip2d = sr_canvas_clip(canvas, 0, 0, MINI_MAP_W, MINI_MAP_H);
-    SR_Canvas clip3d = sr_canvas_clip(canvas, MINI_MAP_W, 0, SCREEN_W, SCREEN_H);
+    SR_Canvas clip0 = sr_canvas_clip(canvas, 0, 0, MINI_MAP_W, MINI_MAP_H);
+    SR_Canvas clip1 = sr_canvas_clip(canvas, MINI_MAP_W, 0, SCREEN_W, SCREEN_H);
 
     sr_fill(canvas, C_BLACK);
-    draw_2d(clip2d);
-    draw_3d(clip3d);
+    mini_map_render(clip0);
+    ray_cast_render(clip1);
 
-    // NOTE: draw time info
+    // NOTE: time info
     {
       Temp scratch = scratch_begin(0, 0);
-      f32 ms_per_frame = ms_state->us_per_frame/thousand(1.0f);
-      f32 frames_per_sec = 1.0f/(ms_state->us_per_frame/million(1.0f));
+      f32 ms_per_frame = ms_state->usec_per_frame/thousand(1.0f);
+      f32 frames_per_sec = 1.0f/(ms_state->usec_per_frame/million(1.0f));
       SR_Font font = ms_state->font;
       String8 text = str8f(scratch.arena, "%.2ffps\n%.2fms", frames_per_sec, ms_per_frame);
       Vector2 size = sr_font_text_size(font, text);
@@ -637,32 +691,20 @@ frame(void) {
 
   // NOTE: flip
   {
-    Vector2 window_size = wm_window_get_size(ms_state->window);
-    f32 wnd_w = window_size.x;
-    f32 wnd_h = window_size.y;
-
-    f32 src_w = ms_state->canvas.w;
-    f32 src_h = ms_state->canvas.h;
-    f32 src_x = 0.0f;
-    f32 src_y = 0.0f;
-
-    f32 ratio_x = floor_f32(wnd_w/src_w);
-    f32 ratio_y = floor_f32(wnd_h/src_h);
-    f32 ratio = (ratio_x < ratio_y) ? ratio_x : ratio_y;
-
-    f32 dst_w = src_w*ratio;
-    f32 dst_h = src_h*ratio;
-    f32 dst_x = (wnd_w - dst_w)/2;
-    f32 dst_y = (wnd_h - dst_h)/2;
+    Vector2 window_size = ms_state->window_size;
+    Range2  canvas_rect = ms_state->canvas_rect;
+    Vector2 canvas_size = vector2_make(ms_state->canvas.w, ms_state->canvas.h);
 
     f32 vertices[] = {
-      dst_x, dst_y, dst_x+dst_w, dst_y+dst_h,
-      src_x, src_y, src_w, src_h,
+      canvas_rect.min.x, canvas_rect.min.y,
+      canvas_rect.max.x, canvas_rect.max.y,
+      0.0f,              0.0f,
+      canvas_size.x,     canvas_size.y,
     };
 
     r_ogl_os_window_select(ms_state->window);
 
-    glViewport(0, 0, (GLsizei)wnd_w, (GLsizei)wnd_h);
+    glViewport(0, 0, (GLsizei)window_size.x, (GLsizei)window_size.y);
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -686,44 +728,41 @@ frame(void) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-    glUniform2f(glGetUniformLocation(ms_state->shader, "u_viewport_size_px"), wnd_w, wnd_h);
+    glUniform2f(glGetUniformLocation(ms_state->shader, "u_viewport_size_px"), window_size.x, window_size.y);
 
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, 1);
 
     r_ogl_os_window_swap(ms_state->window);
   }
 
-  // NOTE: reset frame state
-  {
-    memory_copy_array(ms_state->prev_key_state, ms_state->curr_key_state);
-    arena_clear(ms_state->frame_arena);
-  }
-
   // NOTE: sleep
   {
-    u64 time_end = get_time_us();
-    f32 sec_per_frame = (time_end - ms_state->time_start)/million(1.0f);
+    u64 curr_time = get_time_us();
+    f32 sec_per_frame = (curr_time - ms_state->prev_time)/million(1.0f);
     if (sec_per_frame < ms_state->target_sec_per_frame) {
       u32 ms_to_sleep = (u32)((ms_state->target_sec_per_frame - sec_per_frame)*thousand(1.0f));
       if (ms_to_sleep > 0) {
         sleep_ms(ms_to_sleep);
       }
       while (sec_per_frame < ms_state->target_sec_per_frame) {
-        sec_per_frame = (get_time_us() - ms_state->time_start)/million(1.0f);
+        sec_per_frame = (get_time_us() - ms_state->prev_time)/million(1.0f);
       }
     }
   }
 
-  ms_state->time_end = get_time_us();
-  ms_state->us_per_frame = ms_state->time_end - ms_state->time_start;
-  ms_state->time_start = ms_state->time_end;
+  ms_state->curr_time = get_time_us();
+  ms_state->usec_per_frame = ms_state->curr_time - ms_state->prev_time;
+  ms_state->prev_time = ms_state->curr_time;
 
+  memory_copy_array(ms_state->prev_key_state, ms_state->curr_key_state);
+  arena_clear(ms_state->tran_arena);
   scratch_end(scratch);
+
   return(should_quit);
 }
 
 internal SR_Canvas
-gen_test_image(Arena *arena, s32 w, s32 h, u32 color) {
+generate_test_image(Arena *arena, s32 w, s32 h, u32 color) {
   SR_Canvas result = sr_canvas_alloc(arena, w, h);
   for (s32 y = 0; y < result.h; y += 1) {
     for (s32 x = 0; x < result.w; x += 1) {
@@ -739,12 +778,12 @@ entry_point(int argc, char **argv) {
   timeBeginPeriod(1);
 #endif
 
-  // NOTE: init misery state
+  // NOTE: init global state
   {
     Arena *arena = arena_alloc();
     ms_state = push_array(arena, MS_State, 1);
-    ms_state->arena = arena;
-    ms_state->frame_arena = arena_alloc();
+    ms_state->perm_arena = arena;
+    ms_state->tran_arena = arena_alloc();
   }
 
   // NOTE: init opengl
@@ -773,7 +812,7 @@ entry_point(int argc, char **argv) {
         glGetShaderiv(stages[idx].out, GL_INFO_LOG_LENGTH, &info_log_length);
         if (info_log_length != 0) {
           stages[idx].errors.size = info_log_length;
-          stages[idx].errors.str = push_array(ms_state->arena, u8, info_log_length+1);
+          stages[idx].errors.str = push_array(ms_state->perm_arena, u8, info_log_length+1);
           glGetShaderInfoLog(stages[idx].out, info_log_length, 0, (char *)stages[idx].errors.str);
           sh_message(1, str8_lit("OpenGL: Shader Compilation Error"), stages[idx].errors);
         }
@@ -800,7 +839,7 @@ entry_point(int argc, char **argv) {
   // NOTE: find data path
   {
     String8 exec_path = get_process_info()->exec_path;
-    String8 data_path = str8_cat(ms_state->arena, exec_path, s("/../data/"));
+    String8 data_path = str8_cat(ms_state->perm_arena, exec_path, s("/../data/"));
     if (!set_current_path(data_path)) {
       Temp scratch = scratch_begin(0, 0);
       String8 message = str8f(scratch.arena, "Failed to set current path to \"%.*s\".", str8_varg(data_path));
@@ -812,10 +851,10 @@ entry_point(int argc, char **argv) {
 
   // NOTE: make font
   {
-    IMG_Data img = img_data_from_file_path(ms_state->arena, s("pico8_font.bmp"));
+    IMG_Data img = img_data_from_file_path(ms_state->perm_arena, s("pico8_font.bmp"));
     SR_Canvas atlas = sr_canvas_make(img.data, img.w, img.h, img.w);
-    String8 chars = str8_copy(ms_state->arena, s(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "));
-    ms_state->font = sr_font_make(ms_state->arena, atlas, 4, 6, &chars);
+    String8 chars = str8_copy(ms_state->perm_arena, s(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "));
+    ms_state->font = sr_font_make(ms_state->perm_arena, atlas, 4, 6, &chars);
   }
 
   // NOTE: make test images
@@ -823,37 +862,19 @@ entry_point(int argc, char **argv) {
     s32 w = 4;
     s32 h = 4;
     ms_state->image_count = 5;
-    ms_state->images = push_array(ms_state->arena, SR_Canvas, ms_state->image_count);
-    ms_state->images[0] = gen_test_image(ms_state->arena, w, h, 0xff0000ff);
-    ms_state->images[1] = gen_test_image(ms_state->arena, w, h, 0xff00ff00);
-    ms_state->images[2] = gen_test_image(ms_state->arena, w, h, 0xffff0000);
-    ms_state->images[3] = gen_test_image(ms_state->arena, w, h, 0xffffff00);
-    ms_state->images[4] = gen_test_image(ms_state->arena, w, h, 0xff00ffff);
-  }
-
-  // NOTE: make sprites
-  {
-    ms_state->sprite_count = 2;
-    ms_state->sprites = push_array(ms_state->arena, Sprite_Cast, ms_state->sprite_count);
-    {
-      Sprite_Cast *s = &ms_state->sprites[0];
-      s->x = 2*TILE_SIZE + TILE_SIZE/2;
-      s->y = 2*TILE_SIZE + TILE_SIZE/2;
-      s->image_idx = 4;
-    }
-    {
-      Sprite_Cast *s = &ms_state->sprites[1];
-      s->x = 1*TILE_SIZE + TILE_SIZE/2;
-      s->y = 1*TILE_SIZE + TILE_SIZE/2;
-      s->image_idx = 3;
-    }
+    ms_state->images = push_array(ms_state->perm_arena, SR_Canvas, ms_state->image_count);
+    ms_state->images[0] = generate_test_image(ms_state->perm_arena, w, h, 0xff0000ff);
+    ms_state->images[1] = generate_test_image(ms_state->perm_arena, w, h, 0xff00ff00);
+    ms_state->images[2] = generate_test_image(ms_state->perm_arena, w, h, 0xffff0000);
+    ms_state->images[3] = generate_test_image(ms_state->perm_arena, w, h, 0xffffff00);
+    ms_state->images[4] = generate_test_image(ms_state->perm_arena, w, h, 0xff00ffff);
   }
 
   // NOTE: make canvas
   {
     s32 canvas_w = SCREEN_W + MINI_MAP_W;
     s32 canvas_h = max(SCREEN_H, MINI_MAP_H);
-    ms_state->canvas = sr_canvas_alloc(ms_state->arena, canvas_w, canvas_h);
+    ms_state->canvas = sr_canvas_alloc(ms_state->perm_arena, canvas_w, canvas_h);
     glGenTextures(1, &ms_state->canvas_tex);
   }
 
@@ -865,6 +886,23 @@ entry_point(int argc, char **argv) {
     r_ogl_os_window_equip(ms_state->window);
   }
 
+  {
+    ms_state->num_entities = 2;
+    ms_state->entities = push_array(ms_state->perm_arena, Entity, ms_state->num_entities);
+    {
+      Entity *e = &ms_state->entities[0];
+      e->image_idx = 4;
+      e->x = 2*TILE_SIZE + TILE_SIZE/2;
+      e->y = 2*TILE_SIZE + TILE_SIZE/2;
+    }
+    {
+      Entity *e = &ms_state->entities[1];
+      e->image_idx = 3;
+      e->x = 1*TILE_SIZE + TILE_SIZE/2;
+      e->y = 1*TILE_SIZE + TILE_SIZE/2;
+    }
+  }
+
   ms_state->dim = 2.0f;
   ms_state->pos_x = (MAP_NUM_ROWS/2)*TILE_SIZE;
   ms_state->pos_y = (MAP_NUM_COLS/2)*TILE_SIZE;
@@ -873,14 +911,13 @@ entry_point(int argc, char **argv) {
   ms_state->dir_angle = 0.0f;
   ms_state->mov_delta = 0.0f;
   ms_state->mov_speed = TILE_SIZE*2.0f;
-
   ms_state->fov_angle = rad_from_deg_f32(80.0f);
-  ms_state->proj_plane_dist = 0.5f*SCREEN_W/tan_f32(0.5f*ms_state->fov_angle);
-  ms_state->ray_count = SCREEN_W;
+  ms_state->proj_plane_len = 0.5f*SCREEN_W/tan_f32(0.5f*ms_state->fov_angle);
 
   ms_state->refresh_rate = 60.0f;
   ms_state->target_sec_per_frame = 1.0f/ms_state->refresh_rate;
-  ms_state->time_start = get_time_us();
+
+  ms_state->prev_time = get_time_us();
   wm_window_first_paint(ms_state->window);
 
   for (;!frame(););
