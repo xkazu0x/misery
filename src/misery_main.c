@@ -141,9 +141,10 @@ struct MS_State {
   Arena *perm_arena;
   Arena *tran_arena;
 
-  SR_Font font;
-  u32 image_count;
+  u32    num_images;
   SR_Canvas *images;
+  SR_Font    font;
+
   SR_Canvas canvas;
   WM_Window window;
 
@@ -151,10 +152,9 @@ struct MS_State {
   Range2  canvas_rect;
 
   R_OGL_Shader shader;
-
-  GLuint canvas_tex;
-  GLuint all_purpose_vao;
-  GLuint scratch_buffer_64kb;
+  R_OGL_Buffer buffer;
+  GLuint vao;
+  GLuint tex;
 
   WM_Key curr_key_state[WM_Key_COUNT];
   WM_Key prev_key_state[WM_Key_COUNT];
@@ -186,10 +186,10 @@ struct MS_State {
 
   // NOTE: ray cast
   u32 num_wall_rays;
-  Ray *wall_rays;
+  Ray    *wall_rays;
 
   u32 num_sprite_rays;
-  Ray *sprite_rays;
+  Ray    *sprite_rays;
 };
 
 global MS_State *ms_state = 0;
@@ -698,7 +698,7 @@ frame(void) {
     Range2  canvas_rect = ms_state->canvas_rect;
     Vector2 canvas_size = vector2_make(ms_state->canvas.w, ms_state->canvas.h);
 
-    f32 vertices[] = {
+    f32 vertex_data[] = {
       canvas_rect.min.x, canvas_rect.min.y,
       canvas_rect.max.x, canvas_rect.max.y,
       0.0f,              0.0f,
@@ -706,17 +706,16 @@ frame(void) {
     };
 
     r_ogl_os_window_select(ms_state->window);
-
     glViewport(0, 0, (GLsizei)window_size.x, (GLsizei)window_size.y);
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(ms_state->shader.program);
-    glBindVertexArray(ms_state->all_purpose_vao);
+    glUniform2f(glGetUniformLocation(ms_state->shader.program, "u_viewport_size_px"), window_size.x, window_size.y);
 
-    glBindBuffer(GL_ARRAY_BUFFER, ms_state->scratch_buffer_64kb);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-
+    glBindVertexArray(ms_state->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, ms_state->buffer.id);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertex_data), vertex_data);
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
     glVertexAttribDivisor(0, 1);
@@ -725,16 +724,14 @@ frame(void) {
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 8*sizeof(f32), (void *)(4*sizeof(f32)));
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, ms_state->canvas_tex);
+    glBindTexture(GL_TEXTURE_2D, ms_state->tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ms_state->canvas.w, ms_state->canvas.h, 0, GL_BGRA, GL_UNSIGNED_BYTE, ms_state->canvas.data);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-    glUniform2f(glGetUniformLocation(ms_state->shader.program, "u_viewport_size_px"), window_size.x, window_size.y);
 
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, 1);
-
     r_ogl_os_window_swap(ms_state->window);
   }
 
@@ -798,11 +795,8 @@ entry_point(int argc, char **argv) {
   // NOTE: init opengl renderer
   {
     ms_state->shader = r_ogl_shader_make(&r_ogl_rect_vshad_src, &r_ogl_rect_fshad_src);
-    glGenVertexArrays(1, &ms_state->all_purpose_vao);
-    glGenBuffers(1, &ms_state->scratch_buffer_64kb);
-    glBindBuffer(GL_ARRAY_BUFFER, ms_state->scratch_buffer_64kb);
-    glBufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    ms_state->buffer = r_ogl_buffer_make(R_OGL_Buffer_Target_VERTEX, R_OGL_Buffer_Usage_DYNAMIC, KB(64), 0);
+    glGenVertexArrays(1, &ms_state->vao);
   }
 
   // NOTE: change to data path
@@ -818,6 +812,19 @@ entry_point(int argc, char **argv) {
     }
   }
 
+  // NOTE: make images
+  {
+    s32 w = 4;
+    s32 h = 4;
+    ms_state->num_images = 5;
+    ms_state->images = push_array(ms_state->perm_arena, SR_Canvas, ms_state->num_images);
+    ms_state->images[0] = generate_test_image(ms_state->perm_arena, w, h, 0xff0000ff);
+    ms_state->images[1] = generate_test_image(ms_state->perm_arena, w, h, 0xff00ff00);
+    ms_state->images[2] = generate_test_image(ms_state->perm_arena, w, h, 0xffff0000);
+    ms_state->images[3] = generate_test_image(ms_state->perm_arena, w, h, 0xffffff00);
+    ms_state->images[4] = generate_test_image(ms_state->perm_arena, w, h, 0xff00ffff);
+  }
+
   // NOTE: make font
   {
     Image img = img_from_file_path(ms_state->perm_arena, s("pico8_font.bmp"));
@@ -826,25 +833,12 @@ entry_point(int argc, char **argv) {
     ms_state->font = sr_font_make(ms_state->perm_arena, atlas, 4, 6, &chars);
   }
 
-  // NOTE: make test images
-  {
-    s32 w = 4;
-    s32 h = 4;
-    ms_state->image_count = 5;
-    ms_state->images = push_array(ms_state->perm_arena, SR_Canvas, ms_state->image_count);
-    ms_state->images[0] = generate_test_image(ms_state->perm_arena, w, h, 0xff0000ff);
-    ms_state->images[1] = generate_test_image(ms_state->perm_arena, w, h, 0xff00ff00);
-    ms_state->images[2] = generate_test_image(ms_state->perm_arena, w, h, 0xffff0000);
-    ms_state->images[3] = generate_test_image(ms_state->perm_arena, w, h, 0xffffff00);
-    ms_state->images[4] = generate_test_image(ms_state->perm_arena, w, h, 0xff00ffff);
-  }
-
   // NOTE: make canvas
   {
     s32 canvas_w = SCREEN_W + MINI_MAP_W;
     s32 canvas_h = max(SCREEN_H, MINI_MAP_H);
     ms_state->canvas = sr_canvas_alloc(ms_state->perm_arena, canvas_w, canvas_h);
-    glGenTextures(1, &ms_state->canvas_tex);
+    glGenTextures(1, &ms_state->tex);
   }
 
   // NOTE: open window

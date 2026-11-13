@@ -89,7 +89,8 @@ typedef ptrdiff_t GLintptr;
   X(glDrawArraysInstanced, void, (GLenum mode, GLint first, GLsizei count, GLsizei primcount))\
   X(glVertexAttribDivisor, void, (GLuint index, GLuint divisor))\
   X(glActiveTexture, void, (GLenum texture ))\
-  X(glDeleteProgram, void, (GLuint program))
+  X(glDeleteProgram, void, (GLuint program))\
+  X(glDeleteBuffers, void, (GLsizei n, const GLuint *buffers))
 
 #define X(name, r, p) typedef r (*PFN_ ## name) p;
 R_OGL_PROC_XLIST
@@ -112,6 +113,22 @@ struct R_OGL_Shader {
   GLuint program;
 };
 
+typedef enum R_OGL_Buffer_Target {
+  R_OGL_Buffer_Target_VERTEX,
+  R_OGL_Buffer_Target_INDEX,
+} R_OGL_Buffer_Target;
+
+typedef enum R_OGL_Buffer_Usage {
+  R_OGL_Buffer_Usage_STATIC,
+  R_OGL_Buffer_Usage_DYNAMIC,
+  R_OGL_Buffer_Usage_STREAM,
+} R_OGL_Buffer_Usage;
+
+typedef struct R_OGL_Buffer R_OGL_Buffer;
+struct R_OGL_Buffer {
+  GLuint id;
+};
+
 ////////////////////////////////
 // NOTE: @per_os_impl Hooks
 
@@ -126,9 +143,15 @@ internal void r_ogl_os_window_swap(WM_Window window);
 // NOTE: Backend Hooks
 
 internal void         r_ogl_init(void);
+
 internal GLenum       r_ogl_shader_stage(R_OGL_Shader_Stage stage);
 internal GLuint       r_ogl_shader_compile(R_OGL_Shader_Stage stage, String8 *src);
 internal R_OGL_Shader r_ogl_shader_make(String8 *vsrc, String8 *fsrc);
-internal void         r_ogl_shader_discard(R_OGL_Shader *shader);
+internal void         r_ogl_shader_destroy(R_OGL_Shader *shader);
+
+internal GLenum       r_ogl_buffer_target(R_OGL_Buffer_Target target);
+internal GLenum       r_ogl_buffer_usage(R_OGL_Buffer_Usage usage);
+internal R_OGL_Buffer r_ogl_buffer_make(R_OGL_Buffer_Target target, R_OGL_Buffer_Usage usage, u64 size, void *data);
+internal void         r_ogl_buffer_destroy(R_OGL_Buffer *buffer);
 
 #endif // RENDER_OPENGL_CORE_H

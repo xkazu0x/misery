@@ -59,13 +59,63 @@ r_ogl_shader_make(String8 *vsrc, String8 *fsrc) {
 
   R_OGL_Shader result = {0};
   result.program = program;
-
   return(result);
 }
 
 internal void
-r_ogl_shader_discard(R_OGL_Shader *shader) {
-  if (shader->program) {
+r_ogl_shader_destroy(R_OGL_Shader *shader) {
+  if (shader->program != 0) {
     glDeleteProgram(shader->program);
+    shader->program = 0;
+  }
+}
+
+internal GLenum
+r_ogl_buffer_target(R_OGL_Buffer_Target target) {
+  GLenum result = 0;
+  switch (target) {
+    case R_OGL_Buffer_Target_VERTEX: result = GL_ARRAY_BUFFER; break;
+    case R_OGL_Buffer_Target_INDEX:  result = GL_ELEMENT_ARRAY_BUFFER; break;
+    default: invalid_path; break;
+  }
+  return(result);
+}
+
+internal GLenum
+r_ogl_buffer_usage(R_OGL_Buffer_Usage usage) {
+  GLenum result = 0;
+  switch (usage) {
+    case R_OGL_Buffer_Usage_STATIC:  result = GL_STATIC_DRAW; break;
+    case R_OGL_Buffer_Usage_DYNAMIC: result = GL_DYNAMIC_DRAW; break;
+    case R_OGL_Buffer_Usage_STREAM:  result = GL_STREAM_DRAW; break;
+    default: invalid_path; break;
+  }
+  return(result);
+}
+
+internal R_OGL_Buffer
+r_ogl_buffer_make(R_OGL_Buffer_Target target, R_OGL_Buffer_Usage usage, u64 size, void *data) {
+  GLenum ogl_target = r_ogl_buffer_target(target);
+  GLenum ogl_usage  = r_ogl_buffer_usage(usage);
+
+  GLuint id = 0;
+  glGenBuffers(1, &id);
+  glBindBuffer(ogl_target, id);
+  glBufferData(ogl_target, size, 0, ogl_usage);
+  if (data) {
+    glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+  }
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+  R_OGL_Buffer result = {0};
+  result.id = id;
+  return(result);
+}
+
+internal void
+r_ogl_buffer_destroy(R_OGL_Buffer *buffer) {
+  if (buffer->id != 0) {
+    glDeleteBuffers(1, &buffer->id);
+    buffer->id = 0;
   }
 }
