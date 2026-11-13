@@ -1,7 +1,7 @@
 internal void_proc *
 r_ogl_os_load_proc(char *name) {
-  void_proc *ptr = (void_proc*)wglGetProcAddress(name);
-  if (ptr == (void_proc*)1 || ptr == (void_proc*)2 || ptr == (void_proc*)3 || ptr == (void_proc*)-1) {
+  void_proc *ptr = (void_proc *)wglGetProcAddress(name);
+  if (ptr == (void_proc *)1 || ptr == (void_proc *)2 || ptr == (void_proc *)3 || ptr == (void_proc *)-1) {
     ptr = 0;
   }
   return(ptr);

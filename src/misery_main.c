@@ -1,3 +1,5 @@
+#define WINDOW_MANAGER_INIT_MANUAL 1
+
 #include "base/base.h"
 #include "shell/shell.h"
 #include "window_manager/window_manager.h"
@@ -148,8 +150,9 @@ struct MS_State {
   Vector2 window_size;
   Range2  canvas_rect;
 
+  R_OGL_Shader shader;
+
   GLuint canvas_tex;
-  GLuint shader;
   GLuint all_purpose_vao;
   GLuint scratch_buffer_64kb;
 
@@ -708,7 +711,7 @@ frame(void) {
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glUseProgram(ms_state->shader);
+    glUseProgram(ms_state->shader.program);
     glBindVertexArray(ms_state->all_purpose_vao);
 
     glBindBuffer(GL_ARRAY_BUFFER, ms_state->scratch_buffer_64kb);
@@ -728,7 +731,7 @@ frame(void) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-    glUniform2f(glGetUniformLocation(ms_state->shader, "u_viewport_size_px"), window_size.x, window_size.y);
+    glUniform2f(glGetUniformLocation(ms_state->shader.program, "u_viewport_size_px"), window_size.x, window_size.y);
 
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, 1);
 
@@ -778,7 +781,13 @@ entry_point(int argc, char **argv) {
   timeBeginPeriod(1);
 #endif
 
-  // NOTE: init global state
+  // NOTE: init layers
+  {
+    wm_init();
+    r_ogl_init();
+  }
+
+  // NOTE: init state
   {
     Arena *arena = arena_alloc();
     ms_state = push_array(arena, MS_State, 1);
@@ -786,57 +795,17 @@ entry_point(int argc, char **argv) {
     ms_state->tran_arena = arena_alloc();
   }
 
-  // NOTE: init opengl
+  // NOTE: init opengl renderer
   {
-    r_ogl_os_init();
-
-#define X(name, r, p) name = (name##_Proc_Type *)r_ogl_os_load_proc(#name);
-    R_OGL_PROC_XLIST;
-#undef X
-
-    // NOTE: build shader
-    {
-      struct {GLenum type; String8 *src; GLuint out; String8 errors;} stages[] = {
-        {GL_VERTEX_SHADER,   &r_ogl_rect_vshad_src},
-        {GL_FRAGMENT_SHADER, &r_ogl_rect_fshad_src},
-      };
-
-      for_each_element(idx, stages) {
-        stages[idx].out = glCreateShader(stages[idx].type);
-        GLint src_size = (GLint)stages[idx].src->size;
-        glShaderSource(stages[idx].out, 1, (const GLchar **)&stages[idx].src->str, &src_size);
-        glCompileShader(stages[idx].out);
-        GLint info_log_length = 0;
-        GLint status = 0;
-        glGetShaderiv(stages[idx].out, GL_COMPILE_STATUS, &status);
-        glGetShaderiv(stages[idx].out, GL_INFO_LOG_LENGTH, &info_log_length);
-        if (info_log_length != 0) {
-          stages[idx].errors.size = info_log_length;
-          stages[idx].errors.str = push_array(ms_state->perm_arena, u8, info_log_length+1);
-          glGetShaderInfoLog(stages[idx].out, info_log_length, 0, (char *)stages[idx].errors.str);
-          sh_message(1, str8_lit("OpenGL: Shader Compilation Error"), stages[idx].errors);
-        }
-      }
-
-      GLuint program = glCreateProgram();
-      for_each_element(idx, stages) {
-        glAttachShader(program, stages[idx].out);
-      }
-
-      glLinkProgram(program);
-      glValidateProgram(program);
-      ms_state->shader = program;
-    }
-
+    ms_state->shader = r_ogl_shader_make(&r_ogl_rect_vshad_src, &r_ogl_rect_fshad_src);
     glGenVertexArrays(1, &ms_state->all_purpose_vao);
-
     glGenBuffers(1, &ms_state->scratch_buffer_64kb);
     glBindBuffer(GL_ARRAY_BUFFER, ms_state->scratch_buffer_64kb);
     glBufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
 
-  // NOTE: find data path
+  // NOTE: change to data path
   {
     String8 exec_path = get_process_info()->exec_path;
     String8 data_path = str8_cat(ms_state->perm_arena, exec_path, s("/../data/"));
