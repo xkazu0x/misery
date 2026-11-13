@@ -199,6 +199,7 @@
 ////////////////////////////////
 // NOTE: Foreign Includes
 
+#include <stdlib.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -206,13 +207,9 @@
 #include <math.h>
 #include <float.h>
 #include <string.h>
-
 #if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
 #include <intrin.h>
 #endif
-
-#include <stdlib.h>
-
 #undef min
 #undef max
 

@@ -14,9 +14,9 @@
 #include "base_entry_point.h"
 
 #if OS_WINDOWS
-# include "w32/base/w32_base.h"
+# include "win32/base/win32_base.h"
 #elif OS_LINUX
-# include "lnx/base/lnx_base.h"
+# include "linux/base/linux_base.h"
 #else
 # error Base layer not implemented for this operating system.
 #endif

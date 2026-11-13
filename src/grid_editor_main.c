@@ -1,16 +1,16 @@
 #include "base/base.h"
-#include "sh/sh.h"
-#include "wm/wm.h"
-#include "r/ogl/r_ogl.h"
-#include "img/img.h"
-#include "sr/sr.h"
+#include "shell/shell.h"
+#include "window_manager/window_manager.h"
+#include "render/opengl/render_opengl.h"
+#include "image/image.h"
+#include "software_render/software_render.h"
 
 #include "base/base.c"
-#include "sh/sh.c"
-#include "wm/wm.c"
-#include "r/ogl/r_ogl.c"
-#include "img/img.c"
-#include "sr/sr.c"
+#include "shell/shell.c"
+#include "window_manager/window_manager.c"
+#include "render/opengl/render_opengl.c"
+#include "image/image.c"
+#include "software_render/software_render.c"
 
 #if OS_WINDOWS
 # include <timeapi.h>
@@ -598,7 +598,7 @@ entry_point(int argc, char **argv) {
 
   // NOTE: make font
   {
-    IMG_Data img = img_data_from_file_path(ge_state->perm_arena, s("pico8_font.bmp"));
+    Image img = img_from_file_path(ge_state->perm_arena, s("pico8_font.bmp"));
     SR_Canvas atlas = sr_canvas_make(img.data, img.w, img.h, img.w);
     String8 chars = str8_copy(ge_state->perm_arena, s(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "));
     ge_state->font = sr_font_make(ge_state->perm_arena, atlas, 4, 6, &chars);
