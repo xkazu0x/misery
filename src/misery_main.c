@@ -377,10 +377,9 @@ ray_cast_update(void) {
   f32 cam_proj_plane_len = ms_state->proj_plane_len;
 
   // NOTE: wall
-  ms_state->num_wall_rays = SCREEN_W;
-  ms_state->wall_rays = push_array(ms_state->tran_arena, Ray, ms_state->num_wall_rays);
+  f32 half_num_wall_rays = ms_state->num_wall_rays*0.5f;
   for (u32 ray_idx = 0; ray_idx < ms_state->num_wall_rays; ray_idx += 1) {
-    f32 undistorted_angle = atan_f32((ray_idx - ms_state->num_wall_rays/2.0f)/cam_proj_plane_len) + cam_dir_angle;
+    f32 undistorted_angle = atan_f32((ray_idx - half_num_wall_rays)/cam_proj_plane_len) + cam_dir_angle;
     ms_state->wall_rays[ray_idx] = ray_cast(cam_x, cam_y, undistorted_angle);
   }
 
@@ -678,17 +677,15 @@ frame(void) {
 
     // NOTE: time info
     {
-      Temp scratch = scratch_begin(0, 0);
       f32 ms_per_frame = ms_state->usec_per_frame/thousand(1.0f);
       f32 frames_per_sec = 1.0f/(ms_state->usec_per_frame/million(1.0f));
       SR_Font font = ms_state->font;
-      String8 text = str8f(scratch.arena, "%.2ffps\n%.2fms", frames_per_sec, ms_per_frame);
-      Vector2 size = sr_font_text_size(font, text);
+      String8 text = str8f(ms_state->tran_arena, "%.2ffps\n%.2fms", frames_per_sec, ms_per_frame);
+      Vector2 size = sr_font_size_from_text(font, text);
       s32 x = canvas.w - size.x - 1;
       s32 y = 0;
       sr_rectf(canvas, x, y, x+size.x, y+size.y, C_BLACK);
-      sr_text(canvas, x, y, text, ms_state->font, C_LAVENDER);
-      scratch_end(scratch);
+      sr_text(canvas, x, y, text, font, C_LAVENDER);
     }
   }
 
@@ -754,9 +751,12 @@ frame(void) {
   ms_state->usec_per_frame = ms_state->curr_time - ms_state->prev_time;
   ms_state->prev_time = ms_state->curr_time;
 
-  memory_copy_array(ms_state->prev_key_state, ms_state->curr_key_state);
-  arena_clear(ms_state->tran_arena);
-  scratch_end(scratch);
+  // NOTE: reset state
+  {
+    memory_copy_array(ms_state->prev_key_state, ms_state->curr_key_state);
+    arena_clear(ms_state->tran_arena);
+    scratch_end(scratch);
+  }
 
   return(should_quit);
 }
@@ -830,7 +830,7 @@ entry_point(int argc, char **argv) {
     Image img = img_from_file_path(ms_state->perm_arena, s("pico8_font.bmp"));
     SR_Canvas atlas = sr_canvas_make(img.data, img.w, img.h, img.w);
     String8 chars = str8_copy(ms_state->perm_arena, s(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "));
-    ms_state->font = sr_font_make(ms_state->perm_arena, atlas, 4, 6, &chars);
+    ms_state->font = sr_font_make(atlas, 4, 6, chars);
   }
 
   // NOTE: make canvas
@@ -876,6 +876,9 @@ entry_point(int argc, char **argv) {
   ms_state->mov_speed = TILE_SIZE*2.0f;
   ms_state->fov_angle = rad_from_deg_f32(80.0f);
   ms_state->proj_plane_len = 0.5f*SCREEN_W/tan_f32(0.5f*ms_state->fov_angle);
+
+  ms_state->num_wall_rays = SCREEN_W;
+  ms_state->wall_rays = push_array(ms_state->perm_arena, Ray, ms_state->num_wall_rays);
 
   ms_state->refresh_rate = 60.0f;
   ms_state->target_sec_per_frame = 1.0f/ms_state->refresh_rate;

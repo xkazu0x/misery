@@ -18,10 +18,10 @@ internal SR_Canvas
 sr_canvas_clip(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h) {
   if (x < 0) x = 0;
   if (y < 0) y = 0;
-  if (x > canvas.w) x = canvas.w;
-  if (y > canvas.h) y = canvas.h;
-  if (x + w > canvas.w) w = canvas.w - x;
-  if (y + h > canvas.h) h = canvas.h - y;
+  // if (x > canvas.w) x = canvas.w;
+  // if (y > canvas.h) y = canvas.h;
+  if ((x+w) > canvas.w) w = canvas.w - x;
+  if ((y+h) > canvas.h) h = canvas.h - y;
   SR_Canvas result = sr_canvas_make((canvas.data + y*canvas.pitch + x), w, h, canvas.pitch);
   return(result);
 }
@@ -34,7 +34,7 @@ sr_canvas_alloc(Arena *arena, s32 w, s32 h) {
 }
 
 internal SR_Font
-sr_font_make(Arena *arena, SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 *chars) {
+sr_font_make(SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 chars) {
   SR_Font result = {0};
   result.atlas = atlas;
   result.chars = chars;
@@ -42,17 +42,33 @@ sr_font_make(Arena *arena, SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 *c
   result.glyph_h = glyph_h;
   result.num_glyph_x = atlas.w/glyph_w;
   result.num_glyph_y = atlas.h/glyph_h;
-  result.glyphs = push_array(arena, SR_Canvas, chars->size);
-  for (u64 idx = 0; idx < chars->size; idx += 1) {
-    s32 x = glyph_w*(idx%result.num_glyph_x);
-    s32 y = glyph_h*(idx/result.num_glyph_x);
-    result.glyphs[idx] = sr_canvas_clip(atlas, x, y, glyph_w, glyph_h);
+  return(result);
+}
+
+internal u32
+sr_font_glyph_from_char(SR_Font font, char c) {
+  u32 result = 0;
+  for (u64 idx = 0; idx < font.chars.size; idx += 1) {
+    if (str8_char_match(font.chars.str[idx], c, 0)) {
+      result = idx;
+      break;
+    }
   }
   return(result);
 }
 
+internal Range2
+sr_font_rect_from_glyph(SR_Font font, u32 idx) {
+  Range2 result = {0};
+  result.min.x = font.glyph_w*(idx%font.num_glyph_x);
+  result.min.y = font.glyph_h*(idx/font.num_glyph_x);
+  result.max.x = result.min.x + font.glyph_w - 1;
+  result.max.y = result.min.y + font.glyph_h - 1;
+  return(result);
+}
+
 internal Vector2
-sr_font_text_size(SR_Font font, String8 text) {
+sr_font_size_from_text(SR_Font font, String8 text) {
   Vector2 result = vector2_make(0, font.glyph_h);
   s32 dx = 0;
   for (u64 idx = 0; idx < text.size; idx += 1) {
@@ -248,12 +264,12 @@ sr_image(SR_Canvas canvas,
          SR_Canvas image, u32 color) {
   if (x0 > x1) swap_t(s32, x0, x1);
   if (y0 > y1) swap_t(s32, y0, y1);
-  s32 dw = x1 - x0;
-  s32 dh = y1 - y0;
-  s32 sw = u1 - u0;
-  s32 sh = v1 - v0;
-  f32 xm = (1.0f/(f32)dw)*(f32)sw;
-  f32 ym = (1.0f/(f32)dh)*(f32)sh;
+  f32 dw = x1 - x0;
+  f32 dh = y1 - y0;
+  f32 sw = u1 - u0;
+  f32 sh = v1 - v0;
+  f32 xm = (1.0f/dw)*sw;
+  f32 ym = (1.0f/dh)*sh;
   if (x0 < 0) {u0 = -x0; x0 = 0;}
   if (y0 < 0) {v0 = -y0; y0 = 0;}
   if (x1 > canvas.w - 1) x1 = canvas.w - 1;
@@ -272,9 +288,8 @@ sr_image(SR_Canvas canvas,
 
 internal void
 sr_char(SR_Canvas canvas, s32 x, s32 y, char c, SR_Font font, u32 color) {
-  u64 idx = str8_find_needle(*font.chars, str8_make((u8 *)(&c), 1), 0);
-  SR_Canvas glyph = font.glyphs[idx];
-  sr_image(canvas, x, y, x+glyph.w-1, y+glyph.h-1, 0, 0, glyph.w-1, glyph.h-1, glyph, color);
+  Range2 r = sr_font_rect_from_glyph(font, sr_font_glyph_from_char(font, c));
+  sr_image(canvas, x, y, x+font.glyph_w-1, y+font.glyph_h-1, r.min.x, r.min.y, r.max.x, r.max.y, font.atlas, color);
 }
 
 internal void

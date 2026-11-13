@@ -11,12 +11,11 @@ struct SR_Canvas {
 typedef struct SR_Font SR_Font;
 struct SR_Font {
   SR_Canvas atlas;
-  String8 *chars;
+  String8 chars;
   s32 glyph_w;
   s32 glyph_h;
   s32 num_glyph_x;
   s32 num_glyph_y;
-  SR_Canvas *glyphs;
 };
 
 internal SR_Canvas sr_canvas_zero(void);
@@ -24,8 +23,10 @@ internal SR_Canvas sr_canvas_make(u32 *data, s32 w, s32 h, s32 pitch);
 internal SR_Canvas sr_canvas_clip(SR_Canvas canvas, s32 x, s32 y, s32 w, s32 h);
 internal SR_Canvas sr_canvas_alloc(Arena *arena, s32 w, s32 h);
 
-internal SR_Font sr_font_make(Arena *arena, SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 *chars);
-internal Vector2 sr_font_text_size(SR_Font font, String8 text);
+internal SR_Font sr_font_make(SR_Canvas atlas, s32 glyph_w, s32 glyph_h, String8 chars);
+internal u32     sr_font_glyph_from_char(SR_Font font, char c);
+internal Range2  sr_font_rect_from_glyph(SR_Font font, u32 idx);
+internal Vector2 sr_font_size_from_text(SR_Font font, String8 text);
 
 internal u32  sr_pget(SR_Canvas canvas, s32 x, s32 y);
 internal void sr_pset(SR_Canvas canvas, s32 x, s32 y, u32 color);
