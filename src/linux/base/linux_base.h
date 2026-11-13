@@ -21,6 +21,18 @@
 #include <unistd.h>
 
 ////////////////////////////////
+// NOTE: Linux Call Interruption Retry Helper
+
+#define LNX_RETRY_ON_EINTR(expr)           \
+(__extension__({                           \
+__typeof__(expr) __ret;                    \
+do {                                       \
+__ret = (expr);                            \
+} while ((__ret == -1) && errno == EINTR); \
+__ret;                                     \
+}))
+
+////////////////////////////////
 // NOTE: File Iterator Types
 
 typedef struct LNX_File_Iter LNX_File_Iter;

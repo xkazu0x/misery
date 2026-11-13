@@ -275,6 +275,9 @@ wm_init(void) {
   }
 
   lnx_wm_state->wm_delete_window_atom = XInternAtom(lnx_wm_state->display, "WM_DELETE_WINDOW", 0);
+  lnx_wm_state->wm_sync_request_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_SYNC_REQUEST", 0);
+  lnx_wm_state->wm_sync_request_counter_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
+
   lnx_wm_state->xim = XOpenIM(lnx_wm_state->display, 0, 0, 0);
   lnx_wm_state->wakeup_fd = eventfd(0, EFD_CLOEXEC);
   lnx_wm_state->system_info.refresh_rate = 60.0f;
@@ -309,27 +312,29 @@ internal WM_Window
 wm_window_open(String8 name, Vector2 size) {
   LNX_WM_Window *w = lnx_wm_window_alloc();
 
-  Visual  *window_visual   = lnx_wm_state->window_visual;
-  int      window_depth    = lnx_wm_state->window_depth;
-  Colormap window_colormap = lnx_wm_state->window_colormap;
+  Visual  *visual   = lnx_wm_state->window_visual;
+  int      depth    = lnx_wm_state->window_depth;
+  Colormap colormap = lnx_wm_state->window_colormap;
 
-  unsigned long window_attrs_mask = 0;
-  XSetWindowAttributes window_attrs = {0};
+  unsigned long attrs_mask = 0;
+  XSetWindowAttributes attrs = {0};
 
-  if (window_visual == 0) {
-    window_visual = (Visual *)CopyFromParent;
-    window_depth = CopyFromParent;
-    window_attrs.background_pixel = 0;
-    window_attrs.border_pixel = 0;
-    window_attrs_mask = CWBackPixel|CWBorderPixel;
+  if (visual == 0) {
+    visual = (Visual *)CopyFromParent;
+    depth = CopyFromParent;
+    // window_attrs.background_pixel = 0;
+    // window_attrs.border_pixel = 0;
+    // window_attrs_mask = CWBackPixel|CWBorderPixel;
   } else {
-    window_attrs.background_pixel = None;
-    window_attrs.border_pixel = 0;
-    window_attrs.colormap = window_colormap;
-    window_attrs_mask = CWBackPixel|CWBorderPixel|CWColormap;
+    attrs.background_pixel = None;
+    attrs.border_pixel = 0;
+    attrs.colormap = colormap;
+    // attrs_mask = CWBackPixel|CWBorderPixel|CWColormap;
+    attrs_mask = CWBackPixmap|CWBorderPixel|CWColormap;
   }
 
   s32 screen = DefaultScreen(lnx_wm_state->display);
+
   s32 monitor_w = DisplayWidth(lnx_wm_state->display, screen);
   s32 monitor_h = DisplayHeight(lnx_wm_state->display, screen);
 
@@ -344,11 +349,12 @@ wm_window_open(String8 name, Vector2 size) {
                             window_x, window_y,
                             window_w, window_h,
                             0,
-                            window_depth,
+                            depth,
                             InputOutput,
-                            window_visual,
-                            window_attrs_mask,
-                            &window_attrs);
+                            visual,
+                            attrs_mask,
+                            &attrs);
+
   XSelectInput(lnx_wm_state->display, w->window,
                ExposureMask|
                PointerMotionMask|
@@ -356,11 +362,20 @@ wm_window_open(String8 name, Vector2 size) {
                ButtonReleaseMask|
                KeyPressMask|
                KeyReleaseMask|
-               StructureNotifyMask);
+               StructureNotifyMask|
+               FocusChangeMask);
+  XSetWindowBackgroundPixmap(lnx_wm_state->display, w->window, None);
   Atom protocols[] = {
     lnx_wm_state->wm_delete_window_atom,
+    lnx_wm_state->wm_sync_request_atom,
   };
   XSetWMProtocols(lnx_wm_state->display, w->window, protocols, array_count(protocols));
+  {
+    XSyncValue initial_value;
+    XSyncIntToValue(&initial_value, 0);
+    w->counter_xid = XSyncCreateCounter(lnx_wm_state->display, initial_value);
+  }
+  XChangeProperty(lnx_wm_state->display, w->window, lnx_wm_state->wm_sync_request_counter_atom, XA_CARDINAL, 32, PropModeReplace, (u8 *)&w->counter_xid, 1);
 
   w->xic = XCreateIC(lnx_wm_state->xim,
                      XNInputStyle, XIMPreeditNothing|XIMStatusNothing,
@@ -453,7 +468,7 @@ wm_window_set_fullscreen(WM_Window window, b32 fullscreen) {
     XEvent event;
     memory_zero_struct(&event);
     event.type = ClientMessage;
-    event.xclient.display = lnx_wm_state->display;
+    // event.xclient.display = lnx_wm_state->display;
     event.xclient.window = w->window;
     event.xclient.message_type = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
     event.xclient.format = 32;
@@ -514,7 +529,7 @@ wm_window_set_maximized(WM_Window window, b32 maximized) {
     XEvent event;
     memory_zero_struct(&event);
     event.type = ClientMessage;
-    event.xclient.display = lnx_wm_state->display;
+    // event.xclient.display = lnx_wm_state->display;
     event.xclient.window = w->window;
     event.xclient.message_type = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
     event.xclient.format = 32;
@@ -567,9 +582,11 @@ internal void
 wm_window_set_minimized(WM_Window window, b32 minimized) {
   LNX_WM_Window *w = lnx_wm_window_from_handle(window);
   if (w != 0) {
-    XIconifyWindow(lnx_wm_state->display, w->window, DefaultScreen(lnx_wm_state->display));
-  } else {
-    XMapWindow(lnx_wm_state->display, w->window);
+    if (minimized) {
+      XIconifyWindow(lnx_wm_state->display, w->window, DefaultScreen(lnx_wm_state->display));
+    } else {
+      XMapWindow(lnx_wm_state->display, w->window);
+    }
   }
   XFlush(lnx_wm_state->display);
 }
@@ -579,9 +596,13 @@ wm_window_get_rect(WM_Window window) {
   Range2 result = {0};
   LNX_WM_Window *w = lnx_wm_window_from_handle(window);
   if (w != 0) {
-    XWindowAttributes attrs = {0};
-    Status status = XGetWindowAttributes(lnx_wm_state->display, w->window, &attrs);
-    result = range2_make((f32)attrs.x, (f32)attrs.y, (f32)(attrs.x+attrs.width), (f32)(attrs.y+attrs.height));
+    if (w->resize_draw) {
+      result = w->last_synced_rect;
+    } else {
+      XWindowAttributes attrs = {0};
+      Status status = XGetWindowAttributes(lnx_wm_state->display, w->window, &attrs);
+      result = range2_make(attrs.x, attrs.y, attrs.x+attrs.width, attrs.y+attrs.height);
+    }
   }
   return(result);
 }
@@ -591,9 +612,14 @@ wm_window_get_client_rect(WM_Window window) {
   Range2 result = {0};
   LNX_WM_Window *w = lnx_wm_window_from_handle(window);
   if (w != 0) {
-    XWindowAttributes attrs = {0};
-    Status status = XGetWindowAttributes(lnx_wm_state->display, w->window, &attrs);
-    result = range2_make(0, 0, (f32)attrs.width, (f32)attrs.height);
+    if (w->resize_draw) {
+      Vector2 dim = range2_dim(w->last_synced_rect);
+      result = range2_make(0, 0, dim.x, dim.y);
+    } else {
+      XWindowAttributes attrs = {0};
+      Status status = XGetWindowAttributes(lnx_wm_state->display, w->window, &attrs);
+      result = range2_make(0, 0, attrs.width, attrs.height);
+    }
   }
   return(result);
 }
@@ -604,19 +630,17 @@ wm_window_get_client_rect(WM_Window window) {
 internal WM_Event_List
 wm_get_events(Arena *arena, b32 wait) {
   WM_Event_List events = {0};
-
   for (;;) {
     if (XPending(lnx_wm_state->display) == 0) {
       struct pollfd poll_fds[2] = {
         {.fd = ConnectionNumber(lnx_wm_state->display), .events = POLLIN},
         {.fd = lnx_wm_state->wakeup_fd,                 .events = POLLIN},
       };
-      int timeout = wait && events.count == 0 ? -1 : 0;
+      int timeout = (wait && events.count == 0 ? -1 : 0);
       int poll_status = poll(poll_fds, array_count(poll_fds), timeout);
-      assert(poll_status >= 0);
       if (poll_fds[1].revents & POLLIN) {
         u64 dummy = 0;
-        read(lnx_wm_state->wakeup_fd, &dummy, sizeof(dummy));
+        LNX_RETRY_ON_EINTR(read(lnx_wm_state->wakeup_fd, &dummy, sizeof(dummy)));
         wait = 0;
       }
     }
@@ -626,6 +650,9 @@ wm_get_events(Arena *arena, b32 wait) {
 
       b32 set_mouse_cursor = 0;
       switch (event.type) {
+        default: {
+        } break;
+
         case KeyPress:
         case KeyRelease: {
           LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xkey.window);
@@ -705,11 +732,43 @@ wm_get_events(Arena *arena, b32 wait) {
           set_mouse_cursor = 1;
         } break;
 
+        case ConfigureNotify: {
+          LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xconfigure.window);
+          if (!w->resize_draw) {
+            w->last_synced_rect = range2_make(event.xconfigure.x, event.xconfigure.y, event.xconfigure.x+event.xconfigure.width, event.xconfigure.y+event.xconfigure.height);
+          }
+        } break;
+
+        case Expose: {
+          LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xexpose.window);
+          if (XPending(lnx_wm_state->display) == 0) {
+            w->resize_draw = w->waiting_for_resize;
+            frame();
+            w->resize_draw = 0;
+            if (w->waiting_for_resize) {
+              w->waiting_for_resize = 0;
+              XSyncValue sync_value;
+              XSyncIntsToValue(&sync_value, w->counter_value & 0xffffffffu, (int)((w->counter_value & 0xffffffff00000000ull) >> 32));
+              XSyncSetCounter(lnx_wm_state->display, w->counter_xid, sync_value);
+              XFlush(lnx_wm_state->display);
+            }
+          }
+        } break;
+
         case ClientMessage: {
           if ((Atom)event.xclient.data.l[0] == lnx_wm_state->wm_delete_window_atom) {
             LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xclient.window);
             WM_Event *e = wm_event_list_push(arena, &events, WM_Event_Type_WINDOW_CLOSE);
             e->window = lnx_wm_handle_from_window(w);
+          }
+          else if ((Atom)event.xclient.data.l[0] == lnx_wm_state->wm_sync_request_atom) {
+            LNX_WM_Window *w = lnx_wm_window_from_x11_window(event.xclient.window);
+            if (w != 0) {
+              u32 counter_lo = event.xclient.data.l[2];
+              u32 counter_hi = event.xclient.data.l[3];
+              w->counter_value = (((u64)counter_hi << 32) | counter_lo);
+              w->waiting_for_resize = 1;
+            }
           }
         } break;
       }

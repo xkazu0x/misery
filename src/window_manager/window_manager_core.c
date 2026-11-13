@@ -15,8 +15,7 @@ wm_window_match(WM_Window a, WM_Window b) {
 
 internal Vector2
 wm_window_get_size(WM_Window window) {
-  Range2 r = wm_window_get_client_rect(window);
-  Vector2 result = vector2_make(r.x1-r.x0, r.y1-r.y0);
+  Vector2 result = range2_dim(wm_window_get_rect(window));
   return(result);
 }
 

@@ -12,9 +12,9 @@ cc_release="-g -O2 -DBUILD_DEBUG=0 ${cc_common}"
 cc_link="-lm"
 
 # --- External Libraries ------------------------------------------------------
-# dependencies: pkg-config libx11 libxcursor libGL
+# dependencies: pkg-config libx11 libxcursor libxext libGL
 if [[ -x "$(command -v pkg-config)" ]]; then
-  cc_os_gfx="$(pkg-config --cflags --libs x11 xcursor)"
+  cc_os_gfx="$(pkg-config --cflags --libs x11 xcursor xext)"
   cc_render="$(pkg-config --cflags --libs gl)"
 else
   cc_os_gfx="-lX11 -lXcursor"

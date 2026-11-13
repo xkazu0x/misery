@@ -7,8 +7,10 @@
 #undef internal
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/XKBlib.h>
 #include <X11/Xcursor/Xcursor.h>
+#include <X11/extensions/sync.h>
 #include <poll.h>
 #include <sys/eventfd.h>
 #define internal static
@@ -22,6 +24,11 @@ struct LNX_WM_Window {
   LNX_WM_Window *prev;
   Window window;
   XIC xic;
+  XID counter_xid;
+  u64 counter_value;
+  b32 resize_draw;
+  Range2 last_synced_rect;
+  b32 waiting_for_resize;
 };
 
 ////////////////////////////////
@@ -33,6 +40,9 @@ struct LNX_WM_State {
   Display *display;
 
   Atom wm_delete_window_atom;
+  Atom wm_sync_request_atom;
+  Atom wm_sync_request_counter_atom;
+
   XIM xim;
   s32 wakeup_fd;
 
